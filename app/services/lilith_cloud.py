@@ -532,6 +532,32 @@ class LilithCloudService:
 
     _public_ip_cache: Optional[str] = None
 
+    #: Why the last get_roles() call was rejected ("" when none / it succeeded).
+    last_roles_error: Optional[str] = None
+    last_roles_error_type: Optional[Any] = None
+
+    #: Human explanation for the gateway's `account db nil` (errorType=4):
+    #: the account has never completed a real in-game login, so the gateway
+    #: (rocdir) has no record of it yet.
+    ROLES_UNREGISTERED_MSG = (
+        "هذا الحساب لم يسجّل دخوله أبدًا عبر المحاكي أو الهاتف، لذا بوابة Lilith "
+        "لا تعرفه بعد (account db nil). سجّل الدخول به مرة واحدة داخل اللعبة "
+        "(محاكي أو هاتف) ثم أعد الربط هنا. "
+        "/ Never signed in through the emulator or phone yet — log into the "
+        "game once with this account, then link again."
+    )
+
+    @classmethod
+    def roles_error_message(cls) -> str:
+        """Gateway reason mapped to an actionable message ("" when none)."""
+        err = (cls.last_roles_error or "").lower()
+        if "account db" in err:
+            return cls.ROLES_UNREGISTERED_MSG
+        if not err:
+            return ""
+        return (f"رفضت بوابة Lilith جلب الشخصيات: {cls.last_roles_error} "
+                f"(errorType={cls.last_roles_error_type}). أعد المحاولة لاحقًا.")
+
     @classmethod
     def public_ip(cls) -> str:
         """Public egress IP (the official client sends it as &ip=.. on rocdir). Cached."""
@@ -557,7 +583,13 @@ class LilithCloudService:
         (intercepted 2026-09-10):
         GET /get/roles?app_uid=..&app_token=..&app_id=..&lg_channel=and
             &sdk_type=1&ip=..&udid=..&lang=en&platform=android&ignoreserverlist=true
+
+        On rejection, `cls.last_roles_error` holds the gateway's own reason
+        (e.g. "account db nil" = the account has never entered the game
+        through a real client, so the gateway has no record of it).
         """
+        cls.last_roles_error = None
+        cls.last_roles_error_type = None
         url = (
             f"https://rocdir.lilithgame.com/get/roles"
             f"?app_uid={app_uid}&app_token={app_token}&app_id={cls.APP_ID}"
@@ -576,6 +608,8 @@ class LilithCloudService:
                 # Lilith explicitly rejected the token (expired, truncated, or
                 # belonging to another session). No retry: rejected stays rejected.
                 if res_json.get("success") is False:
+                    cls.last_roles_error = str(res_json.get("message") or "")
+                    cls.last_roles_error_type = res_json.get("errorType")
                     print(f"[LilithCloud] get_roles rejected (uid={app_uid}): "
                           f"{res_json.get('message')} (errorType={res_json.get('errorType')})")
                     return []

@@ -253,11 +253,12 @@ def sync_account(req: AccountSyncRequest, request: Request):
 
     raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
     if not raw_characters or len(raw_characters) == 0:
+        gw_msg = LilithCloudService.roles_error_message()
         raise HTTPException(
             status_code=400,
-            detail=("تم تسجيل الدخول بنجاح، لكن Lilith لم يُرجع أي شخصية لهذا الحساب. "
-                    "تأكد أن الحساب مرتبط بممالك Rise of Kingdoms، ثم أعد المحاولة. "
-                    "/ Logged in, but Lilith returned no characters for this account.")
+            detail=gw_msg or ("تم تسجيل الدخول بنجاح، لكن Lilith لم يُرجع أي شخصية لهذا الحساب. "
+                              "تأكد أن الحساب مرتبط بممالك Rise of Kingdoms، ثم أعد المحاولة. "
+                              "/ Logged in, but Lilith returned no characters for this account.")
         )
 
     enc_pw = encrypt_password(password)
@@ -362,6 +363,11 @@ def verify_captcha(req: CaptchaVerifyRequest, request: Request):
     account_id = acc_obj["id"]
 
     raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+    if not raw_characters:
+        gw_msg = LilithCloudService.roles_error_message()
+        raise HTTPException(status_code=400, detail=gw_msg or (
+            "Captcha verified, but Lilith returned no characters for this account. "
+            "Make sure it owns Rise of Kingdoms governors."))
     synced_characters = []
     for rc in raw_characters:
         c_obj = CharacterDAO.upsert(
@@ -445,6 +451,10 @@ def finalize_captcha(req: FinalizeCaptchaRequest, request: Request):
     account_id = acc_obj["id"]
 
     raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+    if not raw_characters:
+        gw_msg = LilithCloudService.roles_error_message()
+        raise HTTPException(status_code=400, detail=gw_msg or (
+            "Verification successful, but Lilith returned no characters for this account."))
     synced_characters = []
     for rc in raw_characters:
         c_obj = CharacterDAO.upsert(

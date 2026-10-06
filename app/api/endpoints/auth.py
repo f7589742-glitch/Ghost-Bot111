@@ -97,10 +97,11 @@ async def verify_otp_code(payload: VerifyCodeRequest, request: Request):
 
     raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
     if not raw_characters:
+        gw_msg = LilithCloudService.roles_error_message()
         raise HTTPException(
             status_code=400,
-            detail=("Logged in, but Lilith returned no characters for this account. "
-                    "Make sure the account owns Rise of Kingdoms governors."))
+            detail=gw_msg or ("Logged in, but Lilith returned no characters for this account. "
+                              "Make sure the account owns Rise of Kingdoms governors."))
 
     # Preserve an already-stored password so the password tab keeps working.
     keep_pw = ""
