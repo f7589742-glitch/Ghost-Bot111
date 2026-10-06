@@ -129,8 +129,8 @@ def ensure_character_active(char: dict) -> bool:
     role_id = int(char.get("role_id", 0))
     server_id = int(char.get("kingdom_id") or char.get("server_id", 0))
     app_uid = str(char.get("app_uid", ""))
-    app_token = str(char.get("access_token", ""))
-    udid = str(char.get("device_udid", "F682A5114F7DD6AD7995F8ED2D6719BA"))
+    app_token = str(char.get("access_token") or char.get("app_token") or "")
+    udid = str(char.get("device_udid") or char.get("udid") or "F682A5114F7DD6AD7995F8ED2D6719BA")
     app_id = int(char.get("server_id_int", 2104267))
     char_name = char.get("name", str(role_id))
 

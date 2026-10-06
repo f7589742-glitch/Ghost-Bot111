@@ -122,9 +122,9 @@ class AccountDAO:
             bids_list = [b for b in bids if b]
             placeholders = ",".join("?" for _ in bids_list)
             if user_id:
-                conds.append(f"user_id = ? AND bot_id IN ({placeholders})")
-                params.append(user_id)
+                conds.append(f"bot_id IN ({placeholders}) AND user_id = ?")
                 params.extend(bids_list)
+                params.append(user_id)
             else:
                 conds.append(f"bot_id IN ({placeholders})")
                 params.extend(bids_list)

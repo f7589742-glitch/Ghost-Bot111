@@ -903,12 +903,12 @@ class AutonomousScheduler:
 
                 if uid:
                     con.execute(
-                        f"UPDATE accounts SET user_id = ?, is_active = 1 WHERE bot_id IN ({placeholders}) AND LOWER(email) NOT LIKE '%shoob%'",
-                        (uid, *bids)
+                        f"UPDATE accounts SET is_active = 1 WHERE bot_id IN ({placeholders}) AND user_id = ? AND LOWER(email) NOT LIKE '%shoob%'",
+                        (*bids, uid)
                     )
                     con.execute(
-                        f"UPDATE characters SET enabled = 1 WHERE account_id IN (SELECT id FROM accounts WHERE bot_id IN ({placeholders})) AND LOWER(name) NOT LIKE '%shoob%'",
-                        tuple(bids)
+                        f"UPDATE characters SET enabled = 1 WHERE account_id IN (SELECT id FROM accounts WHERE bot_id IN ({placeholders}) AND user_id = ?) AND LOWER(name) NOT LIKE '%shoob%'",
+                        (*bids, uid)
                     )
         except Exception as e_bind:
             logger.warning(f"Error in _ensure_accounts_bound for {self._bot_id}: {e_bind}")
@@ -990,9 +990,10 @@ class AutonomousScheduler:
                     _max_slots = int(BotSettingsDAO.get("max_slots", "25", user_id=uid or None) or 25)
                 except Exception:
                     _plan, _max_slots = "Pro", 25
+                _displayed_slots = _n_acc if _n_acc > _n_ch else _n_ch
                 _sep = "─" * 110
-                _boot_ar = f"🚀 GhostBot | الباقة: {_plan} | الخانات المستخدمة: {_n_acc}/{_max_slots} (إجمالي الحكام: {_n_ch})"
-                _boot_en = f"🚀 GhostBot | License: {_plan} | Slots In Use: {_n_acc}/{_max_slots} (Total Governors: {_n_ch})"
+                _boot_ar = f"🚀 GhostBot | الباقة: {_plan} | الخانات المستخدمة: {_displayed_slots}/{_max_slots} (إجمالي الحكام: {_n_ch})"
+                _boot_en = f"🚀 GhostBot | License: {_plan} | Slots In Use: {_displayed_slots}/{_max_slots} (Total Governors: {_n_ch})"
                 _boot = _boot_ar if is_ar else _boot_en
                 logger.info(_boot)
                 print(_boot, flush=True)
@@ -1004,35 +1005,13 @@ class AutonomousScheduler:
                 pass
 
             # ================= STAGE 1: ALL PRIMARY GOVERNORS (SLOT 1) =================
-            # (Stage banner removed: STARTUP BANNER already opened the cycle.)
-
-            async def _run_single_governor(acc, char, stage_num, slot_num, idx, total):
-                if not self._running:
-                    return
-                # Login + switch lines are emitted inside the character cycle.
-                try:
-                    await self._run_character_cycle(acc, char, already_locked=False, force_run=True)
-                except Exception as e_run:
-                    cname = char.get("name") or char.get("role_id")
-                    logger.error(f"[STAGE {stage_num}] Error during visit for {cname}: {e_run}", exc_info=True)
-
-            slot1_tasks = []
-            for idx, (acc, char) in enumerate(slot1_characters, 1):
-                if not self._running:
-                    break
-                cname = char.get("name") or char.get("role_id")
-                if idx > 1:
-                    pre_delay = round(random.uniform(3.0, 5.0), 1)
-                    await asyncio.sleep(pre_delay)
-
-                if not self._running:
-                    break
-                t = asyncio.create_task(_run_single_governor(acc, char, 1, 1, idx, total_slot1))
-                slot1_tasks.append(t)
-
-            # Wait for all Slot 1 tasks to finish
-            if slot1_tasks:
-                await asyncio.gather(*slot1_tasks, return_exceptions=True)
+            from app.services.fleet_engine import FleetDispatchEngine
+            await FleetDispatchEngine.run_governor_queue(
+                governor_items=slot1_characters,
+                scheduler=self,
+                stage_num=1,
+                stage_name="Primary Governors (Slot 1)"
+            )
 
             if not self._running:
                 halt_msg_ar = "🛑 [النظام] تم إيقاف تشغيل الوحدة فوراً بأمر المستخدم."
@@ -1055,23 +1034,13 @@ class AutonomousScheduler:
             await asyncio.sleep(random.uniform(3.0, 5.0))
 
             # ================= STAGE 2: ALL SECONDARY GOVERNORS (SLOT 2) =================
-            # (Stage banner removed: STARTUP BANNER already opened the cycle.)
             if total_slot2 > 0 and self._running:
-                slot2_tasks = []
-                for idx, (acc, char) in enumerate(slot2_characters, 1):
-                    if not self._running:
-                        break
-                    if idx > 1:
-                        pre_delay = round(random.uniform(3.0, 5.0), 1)
-                        await asyncio.sleep(pre_delay)
-
-                    if not self._running:
-                        break
-                    t = asyncio.create_task(_run_single_governor(acc, char, 2, 2, idx, total_slot2))
-                    slot2_tasks.append(t)
-
-                if slot2_tasks:
-                    await asyncio.gather(*slot2_tasks, return_exceptions=True)
+                await FleetDispatchEngine.run_governor_queue(
+                    governor_items=slot2_characters,
+                    scheduler=self,
+                    stage_num=2,
+                    stage_name="Secondary Governors (Slot 2)"
+                )
 
                 if not self._running:
                     halt_msg_ar = "🛑 [النظام] تم إيقاف تشغيل الوحدة فوراً بأمر المستخدم."
