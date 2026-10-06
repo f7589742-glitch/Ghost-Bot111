@@ -1038,8 +1038,11 @@ export default function DashboardPage() {
   // login continues to character picking once solved. Credentials live in
   // memory only until the flow resolves.
   const linkCaptchaPopupRef = useRef<Window | null>(null);
-  const [linkCaptcha, setLinkCaptcha] = useState<{ email: string; password: string; url: string; attempts: number } | null>(null);
+  const [linkCaptcha, setLinkCaptcha] = useState<{ email: string; password: string; url: string; attempts: number; mode?: "password" | "otp"; code?: string } | null>(null);
   const [captchaChecking, setCaptchaChecking] = useState(false);
+  // When the browser blocks popups, the captcha renders in a mini window
+  // embedded inside the modal instead (same URL, no feature lost).
+  const [captchaEmbedded, setCaptchaEmbedded] = useState(false);
 
   const closeLinkCaptchaPopup = () => {
     const p = linkCaptchaPopupRef.current;
@@ -1049,10 +1052,30 @@ export default function DashboardPage() {
     linkCaptchaPopupRef.current = null;
   };
 
+  // Opens the small (430x680) captcha window; falls back to the embedded
+  // mini window when the popup is blocked.
+  const openCaptchaWindow = (url: string) => {
+    if (!url) return;
+    let popped: Window | null = null;
+    try {
+      popped = window.open(url, "lilith_captcha", "popup=yes,width=430,height=680,menubar=no,toolbar=no");
+    } catch {
+      popped = null;
+    }
+    if (popped) {
+      linkCaptchaPopupRef.current = popped;
+      try { popped.focus(); } catch { /* ignore */ }
+      setCaptchaEmbedded(false);
+    } else {
+      setCaptchaEmbedded(true);
+    }
+  };
+
   const cancelLinkCaptcha = () => {
     closeLinkCaptchaPopup();
     setLinkCaptcha(null);
     setCaptchaChecking(false);
+    setCaptchaEmbedded(false);
     setLinkLoading(false);
   };
 
@@ -1090,7 +1113,9 @@ export default function DashboardPage() {
       setCaptchaChecking(true);
       try {
         const botKey = activeBot?.bot_id || activeBot?.id || "bot-1";
-        const res = await syncAccount(linkCaptcha.email, linkCaptcha.password, botKey, user?.id);
+        const res = linkCaptcha.mode === "otp"
+          ? await verifyOtpCode(linkCaptcha.email, linkCaptcha.code || "", botKey, user?.id)
+          : await syncAccount(linkCaptcha.email, linkCaptcha.password, botKey, user?.id);
         if (cancelled) return;
         if (res.status === "REQUIRES_VERIFICATION" || res.status === "CAPTCHA_REQUIRED" || (res as any).captcha_required) {
           setLinkCaptcha((prev) => {
@@ -1112,13 +1137,28 @@ export default function DashboardPage() {
           cancelled = true;
           window.clearInterval(timer);
           closeLinkCaptchaPopup();
+          setCaptchaEmbedded(false);
           setLinkCaptcha(null);
           setLinkLoading(false);
           setLinkError("");
           setLinkPassword("");
+          setLinkOtpCode("");
           proceedToCharacterPick(res.characters);
         }
-      } catch {
+      } catch (err: any) {
+        const msg = String(err?.message || "");
+        // OTP mode: a definitive "code invalid/expired" answer ends polling —
+        // only transient network errors are worth retrying.
+        if (linkCaptcha.mode === "otp" && /غير صحيح|منتهي|expired|invalid/i.test(msg)) {
+          cancelled = true;
+          window.clearInterval(timer);
+          closeLinkCaptchaPopup();
+          setCaptchaEmbedded(false);
+          setLinkCaptcha(null);
+          setLinkLoading(false);
+          setLinkError(msg || (lang === "ar" ? "انتهت صلاحية الرمز — اطلب رمزًا جديدًا." : "Code expired — request a new one."));
+          return;
+        }
         /* transient network error — keep polling */
       } finally {
         setCaptchaChecking(false);
@@ -1133,13 +1173,17 @@ export default function DashboardPage() {
     setCaptchaChecking(true);
     try {
       const botKey = activeBot?.bot_id || activeBot?.id || "bot-1";
-      const res = await syncAccount(linkCaptcha.email, linkCaptcha.password, botKey, user?.id);
+      const res = linkCaptcha.mode === "otp"
+        ? await verifyOtpCode(linkCaptcha.email, linkCaptcha.code || "", botKey, user?.id)
+        : await syncAccount(linkCaptcha.email, linkCaptcha.password, botKey, user?.id);
       if (res.success && res.characters && Array.isArray(res.characters) && res.characters.length > 0) {
         closeLinkCaptchaPopup();
         setLinkCaptcha(null);
+        setCaptchaEmbedded(false);
         setLinkLoading(false);
         setLinkError("");
         setLinkPassword("");
+        setLinkOtpCode("");
         proceedToCharacterPick(res.characters);
       } else {
         setLinkError(lang === "ar" ? "لم يتم الحل بعد — أكمل التحقق في النافذة المصغرة." : "Not solved yet — finish verification in the mini window.");
@@ -1195,11 +1239,22 @@ export default function DashboardPage() {
       }
       setLinkError("");
       setLinkLoading(true);
+      let waitingForCaptcha = false;
       try {
         const botKey = activeBot?.bot_id || activeBot?.id || "bot-1";
         const res = await verifyOtpCode(linkEmail.trim(), linkOtpCode.trim(), botKey, user?.id);
         if ((res as any).status === "REQUIRES_VERIFICATION") {
-          setLinkError(lang === "ar" ? "طلب Lilith تحققًا أمنيًا إضافيًا — أكمله عبر تبويب كلمة المرور." : "Lilith asked for extra verification — complete it via the password tab.");
+          const capUrl = String((res as any).captcha_url || "");
+          waitingForCaptcha = true;
+          setLinkCaptcha({
+            email: linkEmail.trim(), password: "", url: capUrl, attempts: 0,
+            mode: "otp", code: linkOtpCode.trim(),
+          });
+          openCaptchaWindow(capUrl);
+          setLinkError("");
+          notify(lang === "ar"
+            ? "Lilith طلب تحققًا أمنيًا — حلّ الكابتشا في النافذة الصغيرة وسنكمل تلقائيًا."
+            : "Lilith requires a security check — solve it in the mini window and we continue automatically.");
           return;
         }
         if (res.success && res.characters && Array.isArray(res.characters) && res.characters.length > 0) {
@@ -1212,7 +1267,7 @@ export default function DashboardPage() {
       } catch (err: any) {
         setLinkError(err?.message || (lang === "ar" ? "رمز غير صحيح أو منتهي الصلاحية." : "Invalid or expired code."));
       } finally {
-        setLinkLoading(false);
+        if (!waitingForCaptcha) setLinkLoading(false);
       }
       return;
     }
@@ -1238,13 +1293,14 @@ export default function DashboardPage() {
         if (pre && !pre.closed) {
           if (captchaUrl) pre.location.href = captchaUrl;
           pre.focus();
-        } else if (!pre) {
-          setLinkError(lang === "ar" ? "منع المتصفح النافذة المصغرة — اسمح بالنوافذ المنبثقة ثم أعد المحاولة." : "Popup blocked — allow popups and retry.");
-          setLinkLoading(false);
-          return;
+          setCaptchaEmbedded(false);
+        } else {
+          // Popup blocked: show the same challenge in a mini window inside
+          // the modal so the flow never dead-ends.
+          setCaptchaEmbedded(Boolean(captchaUrl));
         }
         enteredCaptcha = true;
-        setLinkCaptcha({ email: linkEmail.trim(), password: linkPassword.trim(), url: captchaUrl || "", attempts: 0 });
+        setLinkCaptcha({ email: linkEmail.trim(), password: linkPassword.trim(), url: captchaUrl || "", attempts: 0, mode: "password" });
         setLinkError(lang === "ar" ? "يتطلب الحساب حل كابتشا أمني من Lilith — حُلّها في النافذة المصغرة وسيكمل تسجيل الدخول تلقائيًا." : "Lilith captcha required — solve it in the mini window; login continues automatically.");
         return;
       }
@@ -4242,6 +4298,26 @@ export default function DashboardPage() {
                   </div>
                 )}
 
+                {/* Mini captcha window inside the modal — used when the
+                    browser blocks the external popup, so the flow never stalls. */}
+                {captchaEmbedded && linkCaptcha?.url && (
+                  <div style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(2,8,12,0.72)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: "min(440px, 94vw)", height: "min(640px, 88vh)", background: "#07141b", border: "1px solid rgba(0,229,255,0.45)", borderRadius: "14px", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(0,0,0,0.6)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderBottom: "1px solid rgba(0,229,255,0.2)", fontSize: "12px", fontWeight: 800, color: "var(--ghost-cyan)" }}>
+                        <span>{lang === "ar" ? "نافذة التحقق المصغرة — حلّها ثم تابع" : "Mini verification window — solve it, then continue"}</span>
+                        <button
+                          className="util-btn"
+                          style={{ width: "28px", height: "28px", padding: 0 }}
+                          onClick={() => setCaptchaEmbedded(false)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <iframe src={linkCaptcha.url} title="Lilith captcha" style={{ flex: 1, border: "none", background: "#fff" }} />
+                    </div>
+                  </div>
+                )}
+
                 {linkCaptcha && (
                   <div style={{ padding: "10px 12px", borderRadius: "10px", background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.35)", color: "var(--text-ice)", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div>
@@ -4260,20 +4336,16 @@ export default function DashboardPage() {
                       </button>
                       <button
                         className="btn-ghost-outline"
-                        onClick={() => {
-                          if (linkCaptcha.url) {
-                            const p = window.open(linkCaptcha.url, "lilith_captcha", "popup=yes,width=430,height=680,menubar=no,toolbar=no");
-                            linkCaptchaPopupRef.current = p;
-                            if (p) p.focus();
-                          }
-                        }}
+                        onClick={() => { if (linkCaptcha.url) openCaptchaWindow(linkCaptcha.url); }}
                         style={{ fontSize: "12px", padding: "6px 14px", cursor: "pointer" }}
                       >
                         {lang === "ar" ? "إعادة فتح النافذة" : "Reopen window"}
                       </button>
                     </div>
                     {/* Manual escape hatch (spec §4): Lilith has no browser bridge,
-                        so if auto-poll never unlocks, paste the captchaId. */}
+                        so if auto-poll never unlocks, paste the captchaId.
+                        Password-only: the OTP tab re-verifies by code instead. */}
+                    {linkCaptcha.mode !== "otp" && (
                     <div style={{ borderTop: "1px solid rgba(0,229,255,0.2)", paddingTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
                       <label style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
                         {lang === "ar"
@@ -4323,6 +4395,7 @@ export default function DashboardPage() {
                         </button>
                       </div>
                     </div>
+                    )}
                   </div>
                 )}
 
