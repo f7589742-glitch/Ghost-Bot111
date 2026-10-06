@@ -16,6 +16,25 @@ token_exchange_schema.json
 # --- archived capture data (3.5GB moved on 2026-08-11) ---
 _archive/
 
+# --- live secrets: NEVER track ---
+.env
+*.db
+*.sqlite
+*.sqlite3
+*token*.txt
+*token*.png
+*token*.log
+*TOKENS*
+current_access_token.txt
+_server_backup/
+_transfer_bak/
+_worktree_incoming/
+python/*.log
+python/*.png
+check_accs.py
+check_db.py
+scratch_trigger.py
+
 # --- caches / runtime ---
 __pycache__/
 *.pyc
