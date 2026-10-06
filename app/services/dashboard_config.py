@@ -321,40 +321,46 @@ def save_room_config(user_id, bot_id, config, account_id=None, role_id=None):
             CharacterSettingsDAO.upsert(character["id"], **patch)
             updated += 1
 
-    # Synchronize scheduled next_run times for active bot unit with new interval
+    # Synchronize scheduled next_run times and interval settings with new interval
     try:
         import datetime
         from app.services.scheduler_service import BotScheduler
         now_dt = datetime.datetime.now()
         now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
         base_minutes = int(interval * 60)
-        is_running = BotSettingsDAO.is_bot_running(bot_id, user_id)
-        
-        if is_running:
-            global_next_dt = BotScheduler.calculate_global_next_run(True, base_minutes)
-            global_next_str = global_next_dt.strftime("%Y-%m-%d %H:%M:%S") if global_next_dt else ""
 
+        # Store explicit run_interval_hours in BotSettings for all query scopes
+        if user_id:
+            BotSettingsDAO.set("run_interval_hours", str(interval), user_id=user_id)
+            BotSettingsDAO.set(f"run_interval_hours_{bot_id}", str(interval), user_id=user_id)
+        BotSettingsDAO.set("run_interval_hours", str(interval))
+        BotSettingsDAO.set(f"run_interval_hours_{bot_id}", str(interval))
+
+        global_next_dt = BotScheduler.calculate_global_next_run(True, base_minutes)
+        global_next_str = global_next_dt.strftime("%Y-%m-%d %H:%M:%S") if global_next_dt else ""
+
+        if user_id:
             BotSettingsDAO.set(f"next_run_timestamp_{bot_id}", global_next_str, user_id=user_id)
             BotSettingsDAO.set("next_run_timestamp", global_next_str, user_id=user_id)
+        BotSettingsDAO.set(f"next_run_timestamp_{bot_id}", global_next_str)
+        BotSettingsDAO.set("next_run_timestamp", global_next_str)
 
-            target_accounts = AccountDAO.get_all(user_id=user_id, bot_id=bot_id)
-            if not target_accounts:
-                target_accounts = AccountDAO.get_all(bot_id=bot_id)
-            if not target_accounts and user_id:
-                target_accounts = AccountDAO.get_all(user_id=user_id)
+        target_accounts = AccountDAO.get_all(user_id=user_id, bot_id=bot_id)
+        if not target_accounts:
+            target_accounts = AccountDAO.get_all(bot_id=bot_id)
+        if not target_accounts and user_id:
+            target_accounts = AccountDAO.get_all(user_id=user_id)
 
-            for account in target_accounts:
-                acc_next_dt = BotScheduler.calculate_next_run(account["id"], True, base_minutes)
-                acc_next_str = acc_next_dt.strftime("%Y-%m-%d %H:%M:%S") if acc_next_dt else global_next_str
-                AccountDAO.update_run_times(account["id"], last_run=now_str, next_run=acc_next_str)
-                for character in CharacterDAO.get_by_account_id(account["id"]):
-                    char_next_dt = BotScheduler.calculate_next_run(character.get("role_id"), True, base_minutes)
-                    char_next_str = char_next_dt.strftime("%Y-%m-%d %H:%M:%S") if char_next_dt else acc_next_str
-                    CharacterDAO.update_run_times(character.get("role_id"), last_run=now_str, next_run=char_next_str)
-        else:
-            BotScheduler.reset_bot_schedule(bot_id, user_id)
+        for account in target_accounts:
+            acc_next_dt = BotScheduler.calculate_next_run(account["id"], True, base_minutes)
+            acc_next_str = acc_next_dt.strftime("%Y-%m-%d %H:%M:%S") if acc_next_dt else global_next_str
+            AccountDAO.update_run_times(account["id"], last_run=now_str, next_run=acc_next_str)
+            for character in CharacterDAO.get_by_account_id(account["id"]):
+                char_next_dt = BotScheduler.calculate_next_run(character.get("role_id"), True, base_minutes)
+                char_next_str = char_next_dt.strftime("%Y-%m-%d %H:%M:%S") if char_next_dt else acc_next_str
+                CharacterDAO.update_run_times(character.get("role_id"), last_run=now_str, next_run=char_next_str)
     except Exception as e_resched:
-        pass
+        logger.warning(f"Error synchronizing room interval: {e_resched}")
 
     saved = read_room_config(user_id, bot_id)
     if saved != config:

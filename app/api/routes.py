@@ -1437,13 +1437,14 @@ def fleet_start(
 
 def _format_relative_time(dt_str: Optional[str], is_future: bool = False) -> str:
     if not dt_str:
-        return "Never" if not is_future else "-"
+        return "Never" if not is_future else "—"
     try:
-        dt = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-        now = datetime.datetime.now()
+        clean_str = dt_str.replace("T", " ").replace("Z", "").strip()
+        dt = datetime.datetime.strptime(clean_str, "%Y-%m-%d %H:%M:%S")
+        now = datetime.datetime.utcnow()
         diff = (now - dt).total_seconds() if not is_future else (dt - now).total_seconds()
         if diff < 0:
-            diff = 0
+            return "Due now" if is_future else "just now"
         if diff < 60:
             return f"{int(diff)}s ago" if not is_future else f"in {int(diff)}s"
         elif diff < 3600:
@@ -1455,7 +1456,8 @@ def _format_relative_time(dt_str: Optional[str], is_future: bool = False) -> str
             return f"{h}h {m}m ago" if not is_future else f"in {h}h {m}m"
         else:
             d = int(diff // 86400)
-            return f"{d}d ago" if not is_future else f"in {d}d"
+            h = int((diff % 86400) // 3600)
+            return f"{d}d ago" if not is_future else f"in {d}d {h}h"
     except Exception:
         return dt_str
 
@@ -1536,13 +1538,13 @@ def get_fleet_grouped(request: Request, user_id: Optional[str] = Query(None), bo
     if norm_bot_id:
         if uid:
             accounts = AccountDAO.get_all(user_id=uid, bot_id=norm_bot_id)
-        else:
+        if not accounts:
             accounts = AccountDAO.get_all(bot_id=norm_bot_id)
     else:
         # All bots / entire fleet for this tenant
         if uid:
             accounts = AccountDAO.get_all(user_id=uid)
-        else:
+        if not accounts:
             accounts = AccountDAO.get_all()
     """Returns this tenant's accounts grouped with their nested characters, status, and formatted run times."""
     
@@ -1552,12 +1554,19 @@ def get_fleet_grouped(request: Request, user_id: Optional[str] = Query(None), bo
         formatted_chars = []
         for c in chars:
             c_dict = dict(c)
+            nr = c.get("next_run")
+            if nr and isinstance(nr, str) and not nr.endswith("Z"):
+                c_dict["next_run"] = nr.replace(" ", "T") + "Z"
             c_dict["last_run_text"] = _format_relative_time(c.get("last_run"), is_future=False)
             c_dict["next_run_text"] = _format_relative_time(c.get("next_run"), is_future=True)
             formatted_chars.append(c_dict)
 
         acc_dict = dict(acc)
+        acc_nr = acc.get("next_run")
+        if acc_nr and isinstance(acc_nr, str) and not acc_nr.endswith("Z"):
+            acc_dict["next_run"] = acc_nr.replace(" ", "T") + "Z"
         acc_dict["last_run_text"] = _format_relative_time(acc.get("last_run"), is_future=False)
+        acc_dict["next_run_text"] = _format_relative_time(acc.get("next_run"), is_future=True)
         acc_dict["characters"] = formatted_chars
         result.append(acc_dict)
     return {"accounts": result}
@@ -2114,14 +2123,20 @@ def bot_fleet(bot_id: str, request: Request, user_id: Optional[str] = Query(None
     req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
     uid = _resolve_tenant_uid(req_uid, bid, request)
     if not uid:
-        return {"bot_id": bid, "accounts": []}
-    accounts = AccountDAO.get_all(user_id=uid, bot_id=bid)
+        accounts = AccountDAO.get_all(bot_id=bid)
+    else:
+        accounts = AccountDAO.get_all(user_id=uid, bot_id=bid)
+        if not accounts:
+            accounts = AccountDAO.get_all(bot_id=bid)
     out_accounts = []
     for acc in accounts:
         chars = CharacterDAO.get_by_account_id(acc["id"])
         chars_list = []
         for c in chars:
             c_dict = dict(c)
+            nr = c_dict.get("next_run")
+            if nr and isinstance(nr, str) and not nr.endswith("Z"):
+                nr = nr.replace(" ", "T") + "Z"
             chars_list.append({
                 "role_id": str(c_dict.get("role_id") or ""),
                 "name": c_dict.get("name") or str(c_dict.get("role_id") or ""),
@@ -2131,16 +2146,21 @@ def bot_fleet(bot_id: str, request: Request, user_id: Optional[str] = Query(None
                 "avatar_url": c_dict.get("avatar_url") or "",
                 "enabled": bool(c_dict.get("enabled", 1)),
                 "last_run": c_dict.get("last_run"),
-                "next_run": c_dict.get("next_run"),
+                "next_run": nr,
                 "last_run_text": _format_relative_time(c_dict.get("last_run"), is_future=False),
                 "next_run_text": _format_relative_time(c_dict.get("next_run"), is_future=True),
             })
         acc_dict = dict(acc)
+        acc_nr = acc_dict.get("next_run")
+        if acc_nr and isinstance(acc_nr, str) and not acc_nr.endswith("Z"):
+            acc_nr = acc_nr.replace(" ", "T") + "Z"
         out_accounts.append({
             "email": acc_dict.get("email") or "",
             "account_id": acc_dict.get("id"),
             "enabled": bool(acc_dict.get("is_active", 1)),
+            "next_run": acc_nr,
             "last_run_text": _format_relative_time(acc_dict.get("last_run"), is_future=False),
+            "next_run_text": _format_relative_time(acc_dict.get("next_run"), is_future=True),
             "characters": chars_list,
         })
     return {

@@ -725,6 +725,14 @@ class AutonomousScheduler:
             raise
         except Exception as cycle_err:
             logger.error(f"Error cycling character visit {cname}: {cycle_err}", exc_info=True)
+            try:
+                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                interval_hours = self._parse_interval_hours()
+                next_run_str = self._calculate_next_run(interval_hours, status="FAILED")
+                CharacterDAO.update_run_times(str(ch.get("role_id")), last_run=now_str, next_run=next_run_str)
+                AccountDAO.update_run_times(acc["id"], last_run=now_str, next_run=next_run_str)
+            except Exception:
+                pass
 
     async def _run_account_pipeline(self, acc: dict, chars: list, force_run: bool = False, already_locked: bool = False):
         """Runs all enabled characters of an account in strict sequential lock for this specific account."""
