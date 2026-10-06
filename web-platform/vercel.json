@@ -7,8 +7,6 @@
   "env": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://ksrfhjhldgsazqjxealh.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_R2QxKP54Z6BjjPUolZoEkg_jWuqI_rB",
-    "SUPABASE_SECRET_KEY": "sb_secret_Pmsmj4HkG7Nu_zSLsHpskw_xFAvFNVa",
-    "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_Pmsmj4HkG7Nu_zSLsHpskw_xFAvFNVa",
     "NEXT_PUBLIC_BACKEND_URL": "https://16.171.9.216:8000",
     "NEXT_PUBLIC_SITE_URL": "https://ghost-bot-jade.vercel.app",
     "BACKEND_URL": "https://16.171.9.216",

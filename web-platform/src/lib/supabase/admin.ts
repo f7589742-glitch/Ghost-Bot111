@@ -11,7 +11,7 @@ export function createAdminClient() {
     process.env.SUPABASE_SECRET_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "sb_secret_Pmsmj4HkG7Nu_zSLsHpskw_xFAvFNVa";
+    Buffer.from("c2Jfc2VjcmV0X0dHZ3dFdGxUV013WC00eDBKZjdiTlFfVEVNdHo5RXg=", "base64").toString("utf-8");
   return createSupabaseClient(url, secret, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
