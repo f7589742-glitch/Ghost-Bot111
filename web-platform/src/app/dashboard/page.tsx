@@ -567,6 +567,28 @@ export default function DashboardPage() {
     return clean;
   };
 
+  // Synchronized countdown formatter for Next Run
+  const formatCountdown = (nextRunTimestamp?: string | null, isRunning: boolean = true, language: string = "ar") => {
+    if (!isRunning || !nextRunTimestamp || nextRunTimestamp === "—" || nextRunTimestamp === "-") {
+      return language === "ar" ? "متوقف (Stopped)" : "Stopped";
+    }
+    const cleanTs = String(nextRunTimestamp).replace(" ", "T");
+    const target = new Date(cleanTs).getTime();
+    if (isNaN(target)) {
+      return formatRelativeTime(String(nextRunTimestamp), language);
+    }
+    const diff = target - Date.now();
+    if (diff <= 0) return language === "ar" ? "جاري البدء..." : "Starting...";
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 0) {
+      return language === "ar" ? `خلال ${hours} س ${minutes} د` : `in ${hours}h ${minutes}m`;
+    }
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    return language === "ar" ? `خلال ${minutes} د ${seconds} ث` : `in ${minutes}m ${seconds}s`;
+  };
+
   // Activity Log Parser to categorize stream into (gather, train, alliance, city, system)
   const parseActivityLine = (line: string, index: number) => {
     const timeMatch = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?)/i);
@@ -1452,22 +1474,58 @@ export default function DashboardPage() {
         setReactorCorePct(dynamicPct);
       }
 
-      // Live Cycle Countdown (Ticking every second based on run interval)
-      const intervalHours = Number(botConfig.runIntervalHours) || 4;
-      const cycleMs = intervalHours * 3600 * 1000;
-      const now = Date.now();
-      const elapsedInCycle = now % cycleMs;
-      const remainingCycleMs = Math.max(0, cycleMs - elapsedInCycle);
-      const remH = Math.floor(remainingCycleMs / (1000 * 60 * 60));
-      const remM = Math.floor((remainingCycleMs / (1000 * 60)) % 60);
-      const remS = Math.floor((remainingCycleMs / 1000) % 60);
-      const pad = (n: number) => String(n).padStart(2, "0");
-      setNextCycleCountdown(`${pad(remH)}:${pad(remM)}:${pad(remS)}`);
+      // Live Cycle Countdown (Synchronized with scheduler next_run and reset on stop)
+      if (!running) {
+        setNextCycleCountdown("00:00:00");
+      } else {
+        let targetMs = 0;
+        const rawTarget = (activeBot as any)?.next_run_timestamp || (activeBot as any)?.next_run;
+        if (rawTarget && typeof rawTarget === "string") {
+          const t = new Date(rawTarget.replace(" ", "T")).getTime();
+          if (!isNaN(t) && t > Date.now()) targetMs = t;
+        }
+
+        const currentAccounts = accountsByBot[activeBot.id] || accountsByBot[activeBot.bot_id] || [];
+        for (const a of currentAccounts) {
+          if (a.enabled !== false && a.next_run) {
+            const t = new Date(String(a.next_run).replace(" ", "T")).getTime();
+            if (!isNaN(t) && t > Date.now()) {
+              if (targetMs === 0 || t < targetMs) {
+                targetMs = t;
+              }
+            }
+          }
+        }
+
+        if (targetMs > 0) {
+          const remainingMs = Math.max(0, targetMs - Date.now());
+          if (remainingMs <= 0) {
+            setNextCycleCountdown(lang === "ar" ? "جاري البدء..." : "Starting...");
+          } else {
+            const remH = Math.floor(remainingMs / (1000 * 60 * 60));
+            const remM = Math.floor((remainingMs / (1000 * 60)) % 60);
+            const remS = Math.floor((remainingMs / 1000) % 60);
+            const pad = (n: number) => String(n).padStart(2, "0");
+            setNextCycleCountdown(`${pad(remH)}:${pad(remM)}:${pad(remS)}`);
+          }
+        } else {
+          const intervalHours = Number(botConfig.runIntervalHours) || 3;
+          const cycleMs = intervalHours * 3600 * 1000;
+          const now = Date.now();
+          const elapsedInCycle = now % cycleMs;
+          const remainingCycleMs = Math.max(0, cycleMs - elapsedInCycle);
+          const remH = Math.floor(remainingCycleMs / (1000 * 60 * 60));
+          const remM = Math.floor((remainingCycleMs / (1000 * 60)) % 60);
+          const remS = Math.floor((remainingCycleMs / 1000) % 60);
+          const pad = (n: number) => String(n).padStart(2, "0");
+          setNextCycleCountdown(`${pad(remH)}:${pad(remM)}:${pad(remS)}`);
+        }
+      }
     }
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [activeBot?.expires_at, activeBot?.created_at, running, lang, botConfig.runIntervalHours]);
+  }, [activeBot?.expires_at, activeBot?.created_at, (activeBot as any)?.next_run_timestamp, (activeBot as any)?.next_run, accountsByBot, running, lang, botConfig.runIntervalHours]);
 
   // Keep selectedRoleIds synchronized with available accounts
   useEffect(() => {
@@ -2717,7 +2775,12 @@ export default function DashboardPage() {
                                 <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/>
                                 <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>
                               </svg>
-                              <span>{formatRelativeTime(acc.next_run_text, lang)}</span>
+                              <span>
+                                {!running
+                                  ? (lang === "ar" ? "متوقف (Stopped)" : "Stopped")
+                                  : formatCountdown(acc.next_run || acc.next_run_text, running, lang)
+                                }
+                              </span>
                             </div>
                           </td>
 

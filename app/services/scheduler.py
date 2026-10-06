@@ -87,6 +87,13 @@ class AutonomousScheduler:
             self._task.cancel()
         _QUEUED_OR_RUNNING_ROLES.clear()
 
+        # Objective 1: Reset on Stop (تصفير الوقت عند الإيقاف)
+        try:
+            from app.services.scheduler_service import BotScheduler
+            BotScheduler.reset_bot_schedule(self._bot_id, self._user_id)
+        except Exception as e_rst:
+            logger.warning(f"Error resetting bot schedule on stop: {e_rst}")
+
         # Abort in-flight waits and close active sockets
         try:
             from app.services.socket_worker import GameSocketWorker
@@ -1083,21 +1090,31 @@ class AutonomousScheduler:
                 await activity_stream.broadcast(stage2_done_msg, user_id=uid)
 
             # Post-cycle completion & next run timestamp calculation
-            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now_dt = datetime.datetime.now()
+            now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
             interval_hours = self._parse_interval_hours()
-            next_run_str = self._calculate_next_run(interval_hours)
-            
-            BotSettingsDAO.set("next_run_timestamp", next_run_str, user_id=uid or None)
+            base_cycle_minutes = int(interval_hours * 60)
+
+            from app.services.scheduler_service import BotScheduler
+            # Objectives 2 & 3: Global sync reference and staggered jitter intervals
+            global_next_dt = BotScheduler.calculate_global_next_run(True, base_cycle_minutes)
+            global_next_str = global_next_dt.strftime("%Y-%m-%d %H:%M:%S") if global_next_dt else ""
+
+            BotSettingsDAO.set("next_run_timestamp", global_next_str, user_id=uid or None)
             if self._bot_id:
-                BotSettingsDAO.set(f"next_run_timestamp_{self._bot_id}", next_run_str, user_id=uid or None)
+                BotSettingsDAO.set(f"next_run_timestamp_{self._bot_id}", global_next_str, user_id=uid or None)
 
             for acc, chars in account_tasks_data:
-                AccountDAO.update_run_times(acc["id"], last_run=now_str, next_run=next_run_str)
+                acc_next_dt = BotScheduler.calculate_next_run(acc["id"], True, base_cycle_minutes)
+                acc_next_str = acc_next_dt.strftime("%Y-%m-%d %H:%M:%S") if acc_next_dt else global_next_str
+                AccountDAO.update_run_times(acc["id"], last_run=now_str, next_run=acc_next_str)
                 for c in chars:
-                    CharacterDAO.update_run_times(c.get("role_id"), last_run=now_str, next_run=next_run_str)
+                    char_next_dt = BotScheduler.calculate_next_run(c.get("role_id"), True, base_cycle_minutes)
+                    char_next_str = char_next_dt.strftime("%Y-%m-%d %H:%M:%S") if char_next_dt else acc_next_str
+                    CharacterDAO.update_run_times(c.get("role_id"), last_run=now_str, next_run=char_next_str)
 
-            sweep_done_msg_ar = f"⚡ [اكتملت دورة الأسطول] تم إنهاء فحص وتشغيل جميع الحكام بنجاح عبر المرحلتين. الدورة القادمة: {next_run_str}"
-            sweep_done_msg_en = f"⚡ [FLEET SWEEP COMPLETE] All two-stage governor cycles finished successfully. Next cycle: {next_run_str}"
+            sweep_done_msg_ar = f"⚡ [اكتملت دورة الأسطول] تم إنهاء فحص وتشغيل جميع الحكام بنجاح عبر المرحلتين. الدورة القادمة: {global_next_str}"
+            sweep_done_msg_en = f"⚡ [FLEET SWEEP COMPLETE] All two-stage governor cycles finished successfully. Next cycle: {global_next_str}"
             sweep_done_msg = sweep_done_msg_ar if is_ar else sweep_done_msg_en
             logger.info(sweep_done_msg)
             print(sweep_done_msg, flush=True)
