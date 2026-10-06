@@ -165,26 +165,15 @@ class AutonomousScheduler:
 
         return 2.0
 
-    def _calculate_next_run(self, interval_hours: float) -> str:
-        base_seconds = interval_hours * 3600
-        if interval_hours <= 0.5:  # <= 30 minutes (e.g. 10m)
-            jitter_seconds = random.uniform(5, 20)
-            if random.choice([True, False]):
-                jitter_seconds = -jitter_seconds
-            total_seconds = max(60, base_seconds + jitter_seconds)
-        elif interval_hours <= 1.5:  # ~1 hour
-            jitter_seconds = random.uniform(30, 90)
-            if random.choice([True, False]):
-                jitter_seconds = -jitter_seconds
-            total_seconds = max(300, base_seconds + jitter_seconds)
-        else:
-            jitter_minutes = random.uniform(10, 20)
-            if random.choice([True, False]):
-                jitter_minutes = -jitter_minutes
-            total_seconds = max(1800, base_seconds + jitter_minutes * 60)
-
-        next_time = datetime.datetime.now() + datetime.timedelta(seconds=total_seconds)
-        return next_time.strftime("%Y-%m-%d %H:%M:%S")
+    def _calculate_next_run(self, interval_hours: float, status: str = "COMPLETED") -> str:
+        from app.services.scheduler_service import BotScheduler
+        base_minutes = int(interval_hours * 60) if interval_hours > 0 else 180
+        next_dt = BotScheduler.calculate_next_run(
+            is_bot_running=True,
+            base_minutes=base_minutes,
+            status=status
+        )
+        return next_dt.strftime("%Y-%m-%d %H:%M:%S") if next_dt else ""
 
     async def _run_character_cycle(self, account: dict, char: dict, already_locked: bool = False, force_run: bool = False):
         role_id = str(char["role_id"])

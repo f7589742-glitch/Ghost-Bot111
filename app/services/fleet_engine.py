@@ -154,8 +154,21 @@ class FleetDispatchEngine:
                     await asyncio.sleep(backoff)
                 else:
                     # Final attempt failed — clean non-blocking notification, release worker immediately
-                    skip_msg_ar = f"⚠️ [تخطي مؤقت] الحاكم [{name}] تعذر الاتصال به بعد {max_retries} محاولات ({err_str}). تم تحرير مسار العمل للمسيرات التالية وسيُعاد المحاولة الدورة القادمة."
-                    skip_msg_en = f"⚠️ [TEMPORARY SKIP] Governor [{name}] failed after {max_retries} attempts ({err_str}). Worker slot released for next accounts; will retry next cycle."
+                    # Enforce standard full 3-hour cycle (180m ± 5m) on failure/skip, avoiding premature 15m re-runs
+                    next_run_str = ""
+                    try:
+                        from app.services.scheduler_service import BotScheduler
+                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        next_dt = BotScheduler.calculate_next_run(role_id, is_bot_running=True, base_minutes=180, status="FAILED")
+                        next_run_str = next_dt.strftime("%Y-%m-%d %H:%M:%S") if next_dt else ""
+                        CharacterDAO.update_run_times(role_id, last_run=now_str, next_run=next_run_str)
+                        if acc.get("id"):
+                            AccountDAO.update_run_times(acc["id"], last_run=now_str, next_run=next_run_str)
+                    except Exception as e_nt:
+                        logger.warning(f"Error updating next_run on failure: {e_nt}")
+
+                    skip_msg_ar = f"⚠️ [تخطي مؤقت] الحاكم [{name}] تعذر الاتصال به بعد {max_retries} محاولات ({err_str}). تم جدولته للدورة القادمة بعد 3 ساعات ({next_run_str})."
+                    skip_msg_en = f"⚠️ [TEMPORARY SKIP] Governor [{name}] failed after {max_retries} attempts ({err_str}). Scheduled for next full 3-hour cycle ({next_run_str})."
                     disp = skip_msg_ar if is_ar else skip_msg_en
                     logger.error(disp)
                     print(disp, flush=True)
