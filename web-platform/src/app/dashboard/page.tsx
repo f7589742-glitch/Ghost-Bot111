@@ -819,6 +819,42 @@ export default function DashboardPage() {
     const updated = { ...configRef.current, [field]: value };
     configRef.current = updated;
     setBotConfig(updated);
+
+    if (field === "runIntervalHours" && activeBot) {
+      const hours = Number(value) || 4;
+      const baseMs = hours * 3600 * 1000;
+      const pad = (n: number) => String(n).padStart(2, "0");
+
+      if (running) {
+        const globalTarget = new Date(Date.now() + baseMs);
+        const globalTargetStr = `${globalTarget.getFullYear()}-${pad(globalTarget.getMonth() + 1)}-${pad(globalTarget.getDate())} ${pad(globalTarget.getHours())}:${pad(globalTarget.getMinutes())}:${pad(globalTarget.getSeconds())}`;
+        (activeBot as any).next_run_timestamp = globalTargetStr;
+        (activeBot as any).next_run = globalTargetStr;
+
+        setAccountsByBot((prev) => {
+          const list = prev[activeBot.id] || prev[activeBot.bot_id] || [];
+          const updatedList = list.map((a: any) => {
+            const jitterMinutes = Math.floor(Math.random() * 11) - 5;
+            const target = new Date(Date.now() + baseMs + jitterMinutes * 60 * 1000);
+            const targetStr = `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())} ${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
+            const diffMs = Math.max(0, target.getTime() - Date.now());
+            const h = Math.floor(diffMs / 3600000);
+            const m = Math.floor((diffMs % 3600000) / 60000);
+            return {
+              ...a,
+              next_run: targetStr,
+              next_run_text: `in ${h}h ${m}m`,
+            };
+          });
+          return {
+            ...prev,
+            [activeBot.id]: updatedList,
+            ...(activeBot.bot_id && activeBot.bot_id !== activeBot.id ? { [activeBot.bot_id]: updatedList } : {}),
+          };
+        });
+      }
+    }
+
     void persistConfig(updated, title);
   };
 
@@ -830,7 +866,40 @@ export default function DashboardPage() {
     void persistConfig(updated, title);
   };
 
-  const handleSaveConfig = () => persistConfig(configRef.current);
+  const handleSaveConfig = () => {
+    if (activeBot && botConfig.runIntervalHours && running) {
+      const hours = Number(botConfig.runIntervalHours) || 4;
+      const baseMs = hours * 3600 * 1000;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const globalTarget = new Date(Date.now() + baseMs);
+      const globalTargetStr = `${globalTarget.getFullYear()}-${pad(globalTarget.getMonth() + 1)}-${pad(globalTarget.getDate())} ${pad(globalTarget.getHours())}:${pad(globalTarget.getMinutes())}:${pad(globalTarget.getSeconds())}`;
+      (activeBot as any).next_run_timestamp = globalTargetStr;
+      (activeBot as any).next_run = globalTargetStr;
+
+      setAccountsByBot((prev) => {
+        const list = prev[activeBot.id] || prev[activeBot.bot_id] || [];
+        const updatedList = list.map((a: any) => {
+          const jitterMinutes = Math.floor(Math.random() * 11) - 5;
+          const target = new Date(Date.now() + baseMs + jitterMinutes * 60 * 1000);
+          const targetStr = `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())} ${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
+          const diffMs = Math.max(0, target.getTime() - Date.now());
+          const h = Math.floor(diffMs / 3600000);
+          const m = Math.floor((diffMs % 3600000) / 60000);
+          return {
+            ...a,
+            next_run: targetStr,
+            next_run_text: `in ${h}h ${m}m`,
+          };
+        });
+        return {
+          ...prev,
+          [activeBot.id]: updatedList,
+          ...(activeBot.bot_id && activeBot.bot_id !== activeBot.id ? { [activeBot.bot_id]: updatedList } : {}),
+        };
+      });
+    }
+    return persistConfig(configRef.current);
+  };
 
   // Gathering Stepper adjustment helper with immediate sync
   // (keeps manual commander-pair slots in sync with march counts)
@@ -1485,38 +1554,32 @@ export default function DashboardPage() {
           if (!isNaN(t) && t > Date.now()) targetMs = t;
         }
 
-        const currentAccounts = accountsByBot[activeBot.id] || accountsByBot[activeBot.bot_id] || [];
-        for (const a of currentAccounts) {
-          if (a.enabled !== false && a.next_run) {
-            const t = new Date(String(a.next_run).replace(" ", "T")).getTime();
-            if (!isNaN(t) && t > Date.now()) {
-              if (targetMs === 0 || t < targetMs) {
-                targetMs = t;
+        if (targetMs === 0) {
+          const currentAccounts = accountsByBot[activeBot.id] || accountsByBot[activeBot.bot_id] || [];
+          for (const a of currentAccounts) {
+            if (a.enabled !== false && a.next_run) {
+              const t = new Date(String(a.next_run).replace(" ", "T")).getTime();
+              if (!isNaN(t) && t > Date.now()) {
+                if (targetMs === 0 || t < targetMs) {
+                  targetMs = t;
+                }
               }
             }
           }
         }
 
-        if (targetMs > 0) {
-          const remainingMs = Math.max(0, targetMs - Date.now());
-          if (remainingMs <= 0) {
-            setNextCycleCountdown(lang === "ar" ? "جاري البدء..." : "Starting...");
-          } else {
-            const remH = Math.floor(remainingMs / (1000 * 60 * 60));
-            const remM = Math.floor((remainingMs / (1000 * 60)) % 60);
-            const remS = Math.floor((remainingMs / 1000) % 60);
-            const pad = (n: number) => String(n).padStart(2, "0");
-            setNextCycleCountdown(`${pad(remH)}:${pad(remM)}:${pad(remS)}`);
-          }
+        const intervalHours = Number(botConfig.runIntervalHours) || 4;
+        if (targetMs === 0) {
+          targetMs = Date.now() + intervalHours * 3600 * 1000;
+        }
+
+        const remainingMs = Math.max(0, targetMs - Date.now());
+        if (remainingMs <= 0) {
+          setNextCycleCountdown(lang === "ar" ? "جاري البدء..." : "Starting...");
         } else {
-          const intervalHours = Number(botConfig.runIntervalHours) || 3;
-          const cycleMs = intervalHours * 3600 * 1000;
-          const now = Date.now();
-          const elapsedInCycle = now % cycleMs;
-          const remainingCycleMs = Math.max(0, cycleMs - elapsedInCycle);
-          const remH = Math.floor(remainingCycleMs / (1000 * 60 * 60));
-          const remM = Math.floor((remainingCycleMs / (1000 * 60)) % 60);
-          const remS = Math.floor((remainingCycleMs / 1000) % 60);
+          const remH = Math.floor(remainingMs / (1000 * 60 * 60));
+          const remM = Math.floor((remainingMs / (1000 * 60)) % 60);
+          const remS = Math.floor((remainingMs / 1000) % 60);
           const pad = (n: number) => String(n).padStart(2, "0");
           setNextCycleCountdown(`${pad(remH)}:${pad(remM)}:${pad(remS)}`);
         }
