@@ -1,0 +1,1711 @@
+"""
+combat_engine.py - Autonomous Barbarian Combat Engine for Rise of Kingdoms Headless Bot.
+Reversed and ground-truth verified from live packet captures & gateway telemetry:
+- Search Barbarian (Opcode 1178): bytes([0x18, 0x01, 0x10, level, 0x08, 0x01, 0x20, 0x01])
+- Search Response (Opcode 1179): Protobuf payload with entity ID, coords, level
+- Map Viewport Ingestion (Opcode 1003): Field 2 contains roaming monsters (type 606 = Barbarian)
+- Inspect Target (Opcode 1050): Coordinates in wire units (1 km = 6.0 wire units)
+- Dispatch March (Opcode 1012): Combat flag=1, real troops, real unlocked commanders
+"""
+
+import sys
+import os
+import time
+import json
+import math
+import struct
+import zlib
+import asyncio
+import logging
+import re
+from typing import Optional, Dict, Any, List, Tuple
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+PYTHON_DIR = os.path.join(PROJECT_ROOT, "python")
+if PYTHON_DIR not in sys.path:
+    sys.path.insert(0, PYTHON_DIR)
+
+try:
+    from headless_client import ProtobufCodec, FrameParser
+    from crypto_module import RokCrypto
+    from derive_seed_from_nonce import derive_seed
+except ImportError:
+    from python.headless_client import ProtobufCodec, FrameParser
+    from python.crypto_module import RokCrypto
+    from python.derive_seed_from_nonce import derive_seed
+
+try:
+    from app.services.proxy_transport import open_game_connection
+except ImportError:
+    from proxy_transport import open_game_connection
+
+try:
+    from app.services.protocol.hero_parser import (
+        parse_heroes_from_1201,
+        parse_roster_from_1157,
+        merge_rosters,
+        parse_wall_garrison_from_1002,
+        parse_unlocked_barb_level_from_1002,
+        persist_roster_to_db,
+    )
+except ImportError:
+    from hero_parser import (
+        parse_heroes_from_1201,
+        parse_roster_from_1157,
+        merge_rosters,
+        parse_wall_garrison_from_1002,
+        parse_unlocked_barb_level_from_1002,
+        persist_roster_to_db,
+    )
+
+logger = logging.getLogger("combat_engine")
+
+OP_SEARCH_BARBARIAN = 1178      # C->S: Search Barbarian by level
+OP_BARBARIAN_SEARCH_RESP = 1179 # S->C: Search response (spawned barbarian)
+OP_MAP_VIEWPORT_STREAM = 1003   # S->C: Map entity batch (roaming barbarians in Field 2)
+OP_MAP_VIEWPORT_REQ = 1004      # C->S: Map viewport request
+OP_OBJECT_SPAWN = 1023          # S->C: Map entity/barbarian spawn
+OP_INSPECT_TARGET = 1050        # C->S: Inspect barbarian target before march
+OP_DISPATCH_MARCH = 1012        # C->S: March dispatch with combat flags
+OP_MARCH_MOVEMENT = 1083        # S->C: March animation/movement confirmation
+
+# Hospital opcodes for auto-healing integration between rounds
+OP_QUERY_WOUNDED = 362
+OP_HEAL_TROOPS = 330
+OP_ALLIANCE_HELP_REQUEST = 2048
+
+# Zero-config dynamic hero discovery opcodes (S->C login stream)
+OP_HERO_CATALOGUE = 1201        # Full unlocked commander catalogue (hero_id/level/star/skills/awakened)
+OP_HERO_ROSTER_SUPPLEMENT = 1157  # Supplemental roster list ({1: hero_id, 4: level} entries)
+
+# DEPRECATED static priority table (2026-09-19 protocol upgrade):
+# Zero-config dynamic hero discovery (Opcode 1201/1157 + garrison via app.services.protocol.hero_parser)
+# replaces this list. Kept ONLY as a last-resort emergency fallback when neither
+# the live roster nor the DB provides any heroes.
+COMBAT_HEROES_PREFERENCE = [
+    15,  # Joan of Arc (High level on fleet)
+    34,  # Gaius Marius (High level on fleet)
+    36,  # Lancelot (Level 30 on fleet)
+    33,  # Constance (Level 30 on fleet)
+    38,  # Sarka (High level gather/combat)
+    6,   # Lohar (Barbarian Hunter)
+    24,  # Centurion
+    1,   # City Keeper
+    35,  # Tomoe Gozen
+    4,   # Minamoto no Yoshitsune
+    2,   # Cao Cao
+    3,   # Sun Tzu
+    8,   # Scipio Africanus
+    11,  # Baibars
+    10,  # Belisarius
+    5,   # Pelagius
+    12,  # Osman I
+    9,   # Hermann
+    7,   # Eulji Mundeok
+    13,  # Kusunoki Masashige
+    14,  # Boudica
+    22,  # Aethelflaed
+    20,  # Richard I
+    21,  # Charles Martel
+]
+
+COMMANDER_NAMES = {
+    6: "Lohar",
+    4: "Minamoto no Yoshitsune",
+    2: "Cao Cao",
+    3: "Sun Tzu",
+    8: "Scipio Africanus",
+    11: "Baibars",
+    10: "Belisarius",
+    5: "Pelagius",
+    12: "Osman I",
+    9: "Hermann",
+    7: "Eulji Mundeok",
+    13: "Kusunoki Masashige",
+    14: "Boudica",
+    22: "Aethelflaed",
+    20: "Richard I",
+    21: "Charles Martel",
+    36: "Lancelot",
+    35: "Tomoe Gozen",
+    38: "Sarka",
+    33: "Constance",
+    24: "Centurion",
+    34: "Gaius Marius",
+    1: "City Keeper",
+    15: "Joan of Arc",
+}
+
+COMMANDER_NAME_TO_ID = {
+    "Auto": 0,
+    "Lohar": 6,
+    "Minamoto no Yoshitsune": 4,
+    "Cao Cao": 2,
+    "Sun Tzu": 3,
+    "Baibars": 11,
+    "Belisarius": 10,
+    "Pelagius": 5,
+    "Osman I": 12,
+    "Hermann": 9,
+    "Eulji Mundeok": 7,
+    "Kusunoki Masashige": 13,
+    "Scipio Africanus": 8,
+    "Boudica": 14,
+    "Aethelflaed": 22,
+    "Richard I": 20,
+    "Charles Martel": 21,
+    "Lancelot": 36,
+    "Tomoe Gozen": 35,
+    "Sarka": 38,
+    "Gaius Marius": 34,
+    "Constance": 33,
+    "Centurion": 24,
+    "City Keeper": 1,
+    "Joan of Arc": 15,
+}
+
+
+def safe_decompress(b: bytes) -> bytes:
+    if not isinstance(b, bytes):
+        return b
+    idx = b.find(b"\x78\x9c")
+    if idx == -1: idx = b.find(b"\x78\x01")
+    if idx != -1:
+        try:
+            return zlib.decompress(b[idx:])
+        except Exception:
+            pass
+    return b
+
+
+def unpack_frames(m: dict) -> list:
+    if not isinstance(m, dict):
+        return []
+    chunks = m.get(1, [])
+    if not isinstance(chunks, list):
+        chunks = [chunks]
+    res = []
+    for c in chunks:
+        it = ProtobufCodec.decode_message(c) if isinstance(c, bytes) else c
+        if isinstance(it, dict):
+            res.append(it)
+    return res
+
+
+# ---------------------------------------------------------------------------
+# Troop power budget per barbarian level (single march).
+# Barbarian army strength roughly doubles every level; these budgets scale with
+# that curve so L1 never gets 5,000 troops while L12 gets crushed the same way.
+# Values are per-march troop counts (mixed T3/T4 army capacity of CH16-17 farms).
+# ---------------------------------------------------------------------------
+TROOP_BUDGET_BY_BARB_LEVEL = {
+    1: 3_000, 2: 5_000, 3: 8_000, 4: 12_000, 5: 18_000,
+    6: 26_000, 7: 35_000, 8: 45_000, 9: 58_000, 10: 72_000,
+    11: 90_000, 12: 110_000, 13: 135_000, 14: 165_000, 15: 200_000,
+    16: 240_000, 17: 285_000, 18: 340_000, 19: 400_000, 20: 470_000,
+    21: 550_000, 22: 640_000, 23: 750_000, 24: 880_000, 25: 1_020_000,
+}
+
+# ---------------------------------------------------------------------------
+# Fleet-wide barbarian claim registry (cross-session, cross-account).
+# With 10 farm accounts sharing the same area, every account would otherwise
+# send its 4 marches at the SAME roaming barbarians. This JSON registry on the
+# server marks a barbarian as claimed for a TTL, so each march/session targets
+# fresh, unclaimed barbarians. Spawned barbs (Opcode 1178) are city-private and
+# never contested, but roaming ones MUST be claimed before dispatching.
+# ---------------------------------------------------------------------------
+CLAIMS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "barb_claims.json",
+)
+
+
+def _load_barb_claims() -> Dict[str, Dict[str, Any]]:
+    try:
+        with open(CLAIMS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_barb_claims(claims: Dict[str, Dict[str, Any]]) -> None:
+    try:
+        tmp = CLAIMS_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(claims, f)
+        os.replace(tmp, CLAIMS_FILE)
+    except Exception:
+        pass
+
+
+# Fleet-wide claim TTL: after a barbarian is attacked (or spawned) by an account,
+# NO other account may target it for this long (user rule: 4 minutes).
+BARB_CLAIM_TTL = 240
+
+
+def is_barb_claimed(eid: Any, ttl: int = BARB_CLAIM_TTL) -> bool:
+    """True when another recent session/fleet member claimed this barbarian (within TTL)."""
+    try:
+        claims = _load_barb_claims()
+        rec = claims.get(str(int(eid)))
+        if not rec:
+            return False
+        return (time.time() - float(rec.get("ts", 0))) < float(rec.get("ttl", ttl))
+    except Exception:
+        return False
+
+
+def claim_barb(eid: Any, role_id: Any, ttl: int = BARB_CLAIM_TTL) -> None:
+    """Persistently claim a barbarian for this role so other sessions skip it."""
+    try:
+        claims = _load_barb_claims()
+        # Prune expired entries to keep the file small
+        now = time.time()
+        claims = {k: v for k, v in claims.items() if (now - float(v.get("ts", 0))) < float(v.get("ttl", ttl))}
+        claims[str(int(eid))] = {"role": str(role_id), "ts": now, "ttl": ttl}
+        _save_barb_claims(claims)
+    except Exception:
+        pass
+
+
+def try_claim_barb(eid: Any, role_id: Any, ttl: int = BARB_CLAIM_TTL) -> bool:
+    """
+    ATOMIC claim gate (first-writer-wins across the fleet).
+    Returns True only when THIS role successfully claimed the barbarian.
+    Returns False when another role already owns a live claim on it.
+
+    This is the core fix for '4 marches from different cities on the same
+    barbarian': the gateway BROADCASTS Opcode 1023 spawns to every nearby
+    city, so without this gate each account's spawn collector captured the
+    OTHER accounts' spawned barbs and everyone attacked the same target.
+    Fail-open (True) only if the claims file is unreadable, to preserve the
+    previous behavior rather than hard-blocking combat.
+    """
+    try:
+        claims = _load_barb_claims()
+        now = time.time()
+        rec = claims.get(str(int(eid)))
+        if rec:
+            fresh = (now - float(rec.get("ts", 0))) < float(rec.get("ttl", ttl))
+            same_role = str(rec.get("role")) == str(role_id)
+            if fresh and not same_role:
+                return False
+            if fresh and same_role:
+                return True  # already ours
+        # Expired or unclaimed -> claim it now
+        claims = {k: v for k, v in claims.items() if (now - float(v.get("ts", 0))) < float(v.get("ttl", ttl))}
+        claims[str(int(eid))] = {"role": str(role_id), "ts": now, "ttl": ttl}
+        _save_barb_claims(claims)
+        return True
+    except Exception:
+        return True
+
+
+def extract_city_and_heroes_from_op1002(p2_bytes: bytes) -> Tuple[Optional[Tuple[float, float]], List[int]]:
+    """
+    Extracts real city coordinates (wire units) and unlocked commanders from Opcode 1002 payload.
+    Wire coordinates: 1 km = 6.0 wire units. (Display = wire / 6.0)
+    """
+    coords = None
+    heroes = []
+    if not p2_bytes:
+        return None, []
+    try:
+        sub = ProtobufCodec.decode_message(p2_bytes)
+
+        # 1. Coords from sub_f1 Tag 3
+        f1 = sub.get(1)
+        if isinstance(f1, bytes):
+            sub_f1 = ProtobufCodec.decode_message(f1)
+            c_bytes = sub_f1.get(3)
+            if isinstance(c_bytes, bytes):
+                m = re.search(b'\r(.{4})\x15(.{4})', c_bytes)
+                if m:
+                    fx = struct.unpack('<f', m.group(1))[0]
+                    fy = struct.unpack('<f', m.group(2))[0]
+                    if 10.0 <= fx <= 7200.0 and 10.0 <= fy <= 7200.0:
+                        coords = (round(fx, 2), round(fy, 2))
+
+        # 1b. Fallback: regex search across p2_bytes
+        if not coords:
+            m = re.search(b'\r(.{4})\x15(.{4})', p2_bytes)
+            if m:
+                fx = struct.unpack('<f', m.group(1))[0]
+                fy = struct.unpack('<f', m.group(2))[0]
+                if 10.0 <= fx <= 7200.0 and 10.0 <= fy <= 7200.0:
+                    coords = (round(fx, 2), round(fy, 2))
+
+        # 2. Heroes from Tag 12 subfield 5 or Tag 9 subfield 4
+        containers = [sub]
+        if isinstance(f1, bytes):
+            containers.insert(0, sub_f1)
+        for container in containers:
+            for tag_id in (12, 9):
+                val = container.get(tag_id)
+                if isinstance(val, bytes):
+                    sub_val = ProtobufCodec.decode_message(val)
+                    h_list = sub_val.get(5) or sub_val.get(4) or []
+                    if not isinstance(h_list, list): h_list = [h_list]
+                    for hb in h_list:
+                        if isinstance(hb, bytes):
+                            hm = ProtobufCodec.decode_message(hb)
+                            hid = hm.get(1)
+                            if isinstance(hid, int) and hid > 0 and hid not in heroes:
+                                heroes.append(hid)
+    except Exception:
+        pass
+
+    return coords, heroes
+
+
+class CombatEngine:
+    """
+    Autonomous Barbarian Combat Engine.
+    Discovers roaming barbarians from Map Viewport (Opcode 1003) and Search (Opcode 1178),
+    inspects targets (1050), and dispatches combat marches (1012) using real unlocked
+    commanders and real city army inventory.
+    """
+
+    @staticmethod
+    def build_search_barbarian_payload(level: int) -> bytes:
+        """
+        Builds Opcode 1178 payload.
+        Ground truth verified capture: 1801 10{level} 0801 2001
+        """
+        return bytes([0x18, 0x01, 0x10, max(1, min(25, int(level))), 0x08, 0x01, 0x20, 0x01])
+
+    @staticmethod
+    def parse_barbarian_search_resp(resp_payload: bytes) -> Optional[Dict[str, Any]]:
+        """
+        Parses S->C Opcode 1179 payload.
+        """
+        all_res = CombatEngine.parse_all_barbarian_search_resps(resp_payload)
+        return all_res[0] if all_res else None
+
+    @staticmethod
+    def parse_all_barbarian_search_resps(resp_payload: bytes) -> List[Dict[str, Any]]:
+        """
+        Parses S->C Opcode 1179 payload using clean Protobuf decoding.
+        Returns list of dicts with entity_id, x, y, level.
+        """
+        results = []
+        if not resp_payload:
+            return results
+
+        try:
+            m = ProtobufCodec.decode_message(resp_payload)
+            target_level = m.get(3, 0)
+            items = m.get(1, [])
+            if not isinstance(items, list):
+                items = [items]
+
+            for it_b in items:
+                if isinstance(it_b, bytes):
+                    sub = ProtobufCodec.decode_message(it_b)
+                    eid = sub.get(2)
+                    pos_b = sub.get(1)
+                    if eid and isinstance(pos_b, bytes) and len(pos_b) >= 10:
+                        v1 = struct.unpack("<f", pos_b[1:5])[0]
+                        v2 = struct.unpack("<f", pos_b[6:10])[0]
+                        if pos_b[0] == 0x0d:
+                            # 0x0d is Tag 1 (X), 0x15 is Tag 2 (Y)
+                            x_val, y_val = v1, v2
+                        elif pos_b[0] == 0x15:
+                            # 0x15 is Tag 2 (Y), 0x0d is Tag 1 (X)
+                            y_val, x_val = v1, v2
+                        else:
+                            x_val, y_val = v1, v2
+
+                        if 10.0 <= x_val <= 7200.0 and 10.0 <= y_val <= 7200.0:
+                            results.append({
+                                "entity_id": eid,
+                                "x": round(x_val, 2),
+                                "y": round(y_val, 2),
+                                "level": target_level,
+                                "source": "search_1179"
+                            })
+        except Exception as e:
+            logger.debug(f"[COMBAT] Protobuf decode 1179 note: {e}")
+
+        # Fallback regex scan across raw bytes if protobuf didn't catch it
+        if not results:
+            try:
+                raw = resp_payload
+                m_coords = re.search(b'\r(.{4})\x15(.{4})', raw)
+                if m_coords:
+                    # \r is Tag 1 (X), \x15 is Tag 2 (Y)
+                    fx = struct.unpack("<f", m_coords.group(1))[0]
+                    fy = struct.unpack("<f", m_coords.group(2))[0]
+                else:
+                    m_coords = re.search(b'\x15(.{4})\r(.{4})', raw)
+                    if m_coords:
+                        # \x15 is Tag 2 (Y), \r is Tag 1 (X)
+                        fy = struct.unpack("<f", m_coords.group(1))[0]
+                        fx = struct.unpack("<f", m_coords.group(2))[0]
+                    else:
+                        fx, fy = 0.0, 0.0
+
+                if fx > 0 and fy > 0:
+                    idx_tag2 = raw.find(b"\x10\x01")
+                    m_eid = re.search(rb'\x10([\x80-\xff]*[\x00-\x7f])', raw[idx_tag2:] if idx_tag2 != -1 else raw)
+                    if m_eid:
+                        eid_bytes = m_eid.group(1)
+                        eid = 0
+                        shift = 0
+                        for b in eid_bytes:
+                            eid |= (b & 0x7f) << shift
+                            shift += 7
+                            if not (b & 0x80):
+                                break
+                        if eid > 1000000:
+                            results.append({
+                                "entity_id": eid,
+                                "x": round(fx, 2),
+                                "y": round(fy, 2),
+                                "level": 0,
+                                "source": "search_1179_fallback"
+                            })
+            except Exception:
+                pass
+
+        return results
+
+    @staticmethod
+    def parse_all_barbarians_from_1003(p2: bytes, city_x: float, city_y: float) -> List[Dict[str, Any]]:
+        """
+        Parses Opcode 1003 map stream. Field 2 contains all nearby map entities.
+        Entities with monster type 606 (Barbarian) are extracted.
+        """
+        barbs = []
+        if not p2:
+            return barbs
+
+        try:
+            pmsg = ProtobufCodec.decode_message(p2)
+            # Field 2 contains map entities
+            items = pmsg.get(2, [])
+            if not isinstance(items, list):
+                items = [items]
+
+            for it_b in items:
+                if not isinstance(it_b, bytes):
+                    continue
+                try:
+                    obj = ProtobufCodec.decode_message(it_b)
+                    f1_b = obj.get(1)
+                    if not isinstance(f1_b, bytes):
+                        continue
+                    f1 = ProtobufCodec.decode_message(f1_b)
+                    eid = f1.get(1)
+                    if not eid:
+                        continue
+
+                    # Check monster info in Field 8
+                    f8_b = obj.get(8)
+                    is_barb = False
+                    lvl = 1
+
+                    if isinstance(f8_b, bytes):
+                        f8 = ProtobufCodec.decode_message(f8_b)
+                        m_info_b = f8.get(4)
+                        if isinstance(m_info_b, bytes):
+                            m_info = ProtobufCodec.decode_message(m_info_b)
+                            m_type = m_info.get(1, 0)
+                            if m_type in (600, 601, 602, 603, 604, 605, 606):  # Barbarians & roaming patrols in RoK
+                                is_barb = True
+                                lvl = m_info.get(3, 1)
+
+                        if not is_barb and b"\x08\xde\x04" in f8_b:
+                            is_barb = True
+                            m_lvl = re.search(rb"\x08\xde\x04\x10\x01\x18([\x01-\x19])", f8_b)
+                            if m_lvl:
+                                lvl = int(m_lvl.group(1)[0])
+
+                    if is_barb:
+                        pos_b = f1.get(3) or obj.get(3) or f1.get(2) or obj.get(2)
+                        px, py = 0.0, 0.0
+                        if isinstance(pos_b, bytes) and len(pos_b) >= 10:
+                            v1 = struct.unpack("<f", pos_b[1:5])[0]
+                            v2 = struct.unpack("<f", pos_b[6:10])[0]
+                            if pos_b[0] == 0x0d:
+                                # 0x0d is Tag 1 (X), 0x15 is Tag 2 (Y)
+                                px, py = v1, v2
+                            elif pos_b[0] == 0x15:
+                                # 0x15 is Tag 2 (Y), 0x0d is Tag 1 (X)
+                                py, px = v1, v2
+                            else:
+                                px, py = v1, v2
+
+                        if px > 0 and py > 0:
+                            dist = round(math.hypot(px - city_x, py - city_y) / 6.0, 2)
+                            barbs.append({
+                                "entity_id": eid,
+                                "x": round(px, 2),
+                                "y": round(py, 2),
+                                "level": lvl,
+                                "dist": dist,
+                                "source": "map_1003"
+                            })
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.debug(f"[COMBAT] Opcode 1003 parsing error: {e}")
+
+        return barbs
+
+    @staticmethod
+    def parse_barbarian_spawn(resp_payload: bytes) -> Optional[Dict[str, Any]]:
+        """
+        Parses S->C Opcode 1023 payload (dynamic map entity spawn).
+        """
+        try:
+            raw = resp_payload
+            idx_coords = raw.find(b"\x1a\n\r")
+            if idx_coords != -1 and len(raw) >= idx_coords + 12:
+                # \r is Tag 1 (X), \x15 is Tag 2 (Y)
+                x_val = struct.unpack("<f", raw[idx_coords+3:idx_coords+7])[0]
+                if raw[idx_coords+7] == 0x15:
+                    y_val = struct.unpack("<f", raw[idx_coords+8:idx_coords+12])[0]
+                    sub_before = raw[:idx_coords]
+                    idx_tag1 = sub_before.rfind(b"\x08")
+                    if idx_tag1 != -1:
+                        i = idx_tag1 + 1
+                        eid = 0
+                        shift = 0
+                        while i < len(sub_before):
+                            b = sub_before[i]
+                            i += 1
+                            eid |= (b & 0x7f) << shift
+                            shift += 7
+                            if not (b & 0x80):
+                                break
+                        if 1000000 < eid < 0x7fffffffffff:
+                            return {
+                                "entity_id": eid,
+                                "x": round(x_val, 2),
+                                "y": round(y_val, 2),
+                                "level": 0,
+                                "source": "spawn_1023"
+                            }
+        except Exception as e:
+            logger.debug(f"[COMBAT] Failed to parse 1023: {e}")
+        return None
+
+    @staticmethod
+    def build_target_inspect_payload(
+        target_entity_id: int,
+        city_x: float = 0.0,
+        city_y: float = 0.0,
+        target_x: float = 0.0,
+        target_y: float = 0.0,
+        alliance_id: int = 0
+    ) -> bytes:
+        """
+        Builds Opcode 1050 payload.
+        Field 1: alliance_id (Varint) - NEVER role_id
+        Field 2: target_barbarian_id (Varint)
+        Field 3: city_coords (Bytes: 0x15 Y, 0x0d X)
+        Field 4: target_barb_coords (Bytes: 0x15 Y, 0x0d X)
+        Field 5: 0 (Varint)
+        """
+        def pack_coords(cx: float, cy: float) -> bytes:
+            return b"\x0d" + struct.pack("<f", float(cx)) + b"\x15" + struct.pack("<f", float(cy))
+
+        f3_city = pack_coords(city_x, city_y)
+        f4_target = pack_coords(target_x, target_y)
+        body = (
+            ProtobufCodec.encode_field_bytes(3, f3_city)
+            + ProtobufCodec.encode_field_varint(5, 0)
+            + ProtobufCodec.encode_field_varint(2, int(target_entity_id))
+            + ProtobufCodec.encode_field_bytes(4, f4_target)
+            + ProtobufCodec.encode_field_varint(1, int(alliance_id or 0))
+        )
+        return body
+
+    @staticmethod
+    def build_send_troop_confirm() -> bytes:
+        """
+        Builds Opcode 8 SendTroopConfirm frame matching genuine RoK client behavior.
+        """
+        js = json.dumps({"E": "SendTroopConfirm", "t": str(int(time.time()))}).encode('utf-8')
+        comp = zlib.compress(js)
+        p2 = ProtobufCodec.encode_field_bytes(1, comp)
+        return ProtobufCodec.encode_field_varint(1, 8) + ProtobufCodec.encode_field_bytes(2, p2)
+
+    @staticmethod
+    def build_combat_dispatch_payload(
+        target_entity_id: int,
+        primary_commander_id: int = 3,
+        secondary_commander_id: int = 0,
+        troops: Optional[List[Tuple[int, int]]] = None,
+        march_index: int = 1
+    ) -> bytes:
+        """
+        Builds Opcode 1012 payload for combat march dispatch.
+        Field 6: 1 (Attack flag)
+        """
+        f4 = ProtobufCodec.encode_field_varint(4, int(target_entity_id))
+        f3 = ProtobufCodec.encode_field_bytes(3, bytes.fromhex("15000000000d00000000"))
+
+        f2_payload = bytearray()
+        if troops:
+            for ut, cnt in troops:
+                if cnt <= 0:
+                    continue
+                it = ProtobufCodec.encode_field_varint(2, int(cnt)) + ProtobufCodec.encode_field_varint(1, int(ut))
+                f2_payload.extend(ProtobufCodec.encode_field_bytes(2, it))
+        else:
+            it = ProtobufCodec.encode_field_varint(2, 500) + ProtobufCodec.encode_field_varint(1, 1)
+            f2_payload.extend(ProtobufCodec.encode_field_bytes(2, it))
+
+        f14 = ProtobufCodec.encode_field_varint(14, 1)
+
+        c1 = (
+            ProtobufCodec.encode_field_varint(1, int(primary_commander_id))
+            + ProtobufCodec.encode_field_varint(3, 0)
+            + ProtobufCodec.encode_field_varint(2, 1)
+        )
+        f1_payload = ProtobufCodec.encode_field_bytes(1, c1)
+
+        if secondary_commander_id and secondary_commander_id > 0:
+            c2 = (
+                ProtobufCodec.encode_field_varint(1, int(secondary_commander_id))
+                + ProtobufCodec.encode_field_varint(3, 0)
+                + ProtobufCodec.encode_field_varint(2, 2)
+            )
+            f1_payload += ProtobufCodec.encode_field_bytes(1, c2)
+
+        f7 = ProtobufCodec.encode_field_varint(7, 0)
+        f6 = ProtobufCodec.encode_field_varint(6, 1)     # Combat Attack Flag
+        f11 = ProtobufCodec.encode_field_varint(11, 0)
+        f18 = ProtobufCodec.encode_field_varint(18, 0)
+        f5 = ProtobufCodec.encode_field_bytes(5, f"dispatch_troop_{march_index}".encode())
+
+        body = f4 + f3 + bytes(f2_payload) + f14 + f1_payload + f7 + f6 + f11 + f18 + f5
+        return body
+
+    @classmethod
+    async def execute_barbarian_hunt(
+        cls,
+        target_role_id: int,
+        kingdom_id: int,
+        gate_host: str,
+        gate_port: int,
+        app_uid: str,
+        app_token: str,
+        udid: str,
+        target_level: Any = 6,
+        highest_barb_level: str = "Max Unlocked",
+        skip_barbs_below: str = "None",
+        primary_commander: str = "Auto",
+        secondary_commander: str = "Auto (best available)",
+        combat_rounds: int = 10,
+        dispatch_all_marches: bool = True,
+        max_marches: int = 5,
+        heal_troops: bool = True,
+        heal_batch: int = 0,
+        hold_position: bool = False,
+        log_callback: Optional[Any] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Executes autonomous barbarian hunts across all available march queues.
+        Discovers both roaming barbarians in the city area (Opcode 1003) and spawns from search (Opcode 1178).
+        Only uses genuinely unlocked commanders and available city troops.
+        """
+        def log(msg: str):
+            if log_callback:
+                log_callback(msg)
+            else:
+                logger.info(msg)
+
+        # 1. Resolve real city coordinates (Display vs Wire) & known unlocked commanders
+        discovered_city_coords: Optional[Tuple[float, float]] = None
+        db_unlocked_heroes: List[int] = []
+        active_alliance_id: int = 0
+        current_ap: Optional[int] = None
+
+        # Zero-config dynamic hero discovery state
+        parsed_1201: List[Dict[str, Any]] = []
+        parsed_1157: List[Dict[str, Any]] = []
+        live_roster: List[Dict[str, Any]] = []
+        garrison_ids: set = set()
+        server_unlocked_barb_lvl: Optional[int] = None
+
+        try:
+            from app.models import CharacterDAO, CharacterSettingsDAO
+            db_char = CharacterDAO.get_by_role_id(str(target_role_id))
+            if db_char and db_char.get("id"):
+                active_alliance_id = int(kwargs.get("alliance_id") or db_char.get("alliance_id") or 8719112)
+                c_set = CharacterSettingsDAO.get_by_character_id(db_char["id"]) or {}
+                # Coords from gather settings
+                g_cfg = c_set.get("gather", {}) or {}
+                cx = float(g_cfg.get("city_x") or db_char.get("city_x") or 0.0)
+                cy = float(g_cfg.get("city_y") or db_char.get("city_y") or 0.0)
+                if cx > 0 and cy > 0:
+                    if cx < 2000.0:
+                        cx *= 6.0
+                        cy *= 6.0
+                    discovered_city_coords = (round(cx, 2), round(cy, 2))
+
+                # Commanders from character settings
+                cmd_list = c_set.get("commanders")
+                if not cmd_list:
+                    raw_cj = c_set.get("commanders_json")
+                    if isinstance(raw_cj, str):
+                        try:
+                            cmd_list = json.loads(raw_cj)
+                        except Exception:
+                            cmd_list = []
+                    elif isinstance(raw_cj, list):
+                        cmd_list = raw_cj
+                if isinstance(cmd_list, list):
+                    for cid in cmd_list:
+                        if isinstance(cid, int) and cid > 0 and cid not in db_unlocked_heroes:
+                            db_unlocked_heroes.append(cid)
+        except Exception as e_db:
+            logger.debug(f"[COMBAT] DB resolve error: {e_db}")
+
+        if not discovered_city_coords:
+            discovered_city_coords = (4363.2, 4174.8) # Default kingdom center wire coordinates
+
+        log(f"[COMBAT] Connecting to Gateway {gate_host}:{gate_port} for Governor #{target_role_id}...")
+
+        reader, writer = await open_game_connection(gate_host, gate_port)
+        try:
+            # 1. Handshake Greeting 8306
+            hdr = await asyncio.wait_for(reader.readexactly(2), timeout=6.0)
+            g_p = await reader.readexactly((hdr[0] << 8) | hdr[1])
+            sub_g = ProtobufCodec.decode_message(ProtobufCodec.decode_message(g_p).get(2, b""))
+            tx, rx = derive_seed(sub_g.get(1, 0), sub_g.get(2, 0))
+            c_tx, c_rx = RokCrypto(tx), RokCrypto(rx)
+
+            # 2. Login Opcode 14
+            login_bytes = kwargs.get("login_bytes")
+            if not login_bytes:
+                from app.services.socket_worker import build_login_frame
+                login_bytes = build_login_frame(
+                    player_id=str(app_uid),
+                    access_token=str(app_token),
+                    app_id=2104267,
+                    platform="android"
+                )
+            writer.write(FrameParser.build_frame(c_tx.encrypt(login_bytes)))
+
+            # Role assertion opcodes 203, 104, 110, 107
+            p203 = ProtobufCodec.encode_message({1: int(target_role_id)})
+            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: 203, 2: p203}))))
+            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: 104, 2: b""}))))
+            p110 = ProtobufCodec.encode_message({1: int(target_role_id), 2: int(kingdom_id), 3: int(target_role_id)})
+            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: 110, 2: p110}))))
+            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: 107, 2: b""}))))
+
+            # Enter World Map mode (Opcodes 6404 & 1001)
+            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: 6404, 2: ProtobufCodec.encode_message({1: int(kingdom_id)})}))))
+            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: 1001, 2: b""}))))
+            await writer.drain()
+
+            # 3. Read profile & military state from Opcode 1002 / 125
+            available_heroes: List[int] = list(db_unlocked_heroes)
+            troops_in_city: Dict[int, int] = {}
+            busy_heroes = set()
+
+            deadline = asyncio.get_event_loop().time() + 4.5
+            while asyncio.get_event_loop().time() < deadline:
+                try:
+                    rh = await asyncio.wait_for(reader.readexactly(2), timeout=0.5)
+                    rl = (rh[0] << 8) | rh[1]
+                    raw = await asyncio.wait_for(reader.readexactly(rl), timeout=0.5)
+                    dec = c_rx.decrypt(raw)
+
+                    decomp = safe_decompress(dec)
+
+                    # Check for Opcode 1002 in raw decompressed frame
+                    pos1002 = decomp.find(b"\x08\xea\x07")
+                    if pos1002 != -1:
+                        sub_1002 = ProtobufCodec.decode_message(decomp[pos1002:])
+                        p2 = sub_1002.get(2)
+                        if isinstance(p2, bytes):
+                            c_tup, h_l = extract_city_and_heroes_from_op1002(p2)
+                            if c_tup:
+                                discovered_city_coords = c_tup
+                            for hid in h_l:
+                                if hid not in available_heroes:
+                                    available_heroes.append(hid)
+
+                            # Zero-config dynamic roster + wall-garrison + unlocked barb level (Opcode 1002)
+                            try:
+                                garrison_ids |= parse_wall_garrison_from_1002(p2)
+                                server_unlocked_barb_lvl = parse_unlocked_barb_level_from_1002(p2)
+                            except Exception as e_dyn:
+                                logger.debug(f"[COMBAT] 1002 dynamic-hero note: {e_dyn}")
+
+                            sub_p2 = ProtobufCodec.decode_message(p2)
+                            # Troops from Tag 19 (Field 1 contains troop records)
+                            tag19_raw = sub_p2.get(19)
+                            if isinstance(tag19_raw, bytes):
+                                inner = ProtobufCodec.decode_message(tag19_raw)
+                                items = inner.get(1, [])
+                                if not isinstance(items, list): items = [items]
+                                for item_b in items:
+                                    if isinstance(item_b, bytes):
+                                        it = ProtobufCodec.decode_message(item_b)
+                                        ut = it.get(1)
+                                        cnt = it.get(3) or it.get(2) or 0
+                                        if ut and cnt > 0:
+                                            troops_in_city[ut] = cnt
+
+                    m = ProtobufCodec.decode_message(decomp)
+                    chunks = m.get(1) if isinstance(m.get(1), list) else [m]
+                    for c in chunks:
+                        it = ProtobufCodec.decode_message(c) if isinstance(c, bytes) else c
+                        if not isinstance(it, dict): continue
+                        op = it.get(1)
+                        if op == 1002:
+                            p2_direct = it.get(2)
+                            if isinstance(p2_direct, bytes):
+                                c_tup, h_l = extract_city_and_heroes_from_op1002(p2_direct)
+                                if c_tup:
+                                    discovered_city_coords = c_tup
+                                for hid in h_l:
+                                    if hid not in available_heroes:
+                                        available_heroes.append(hid)
+                                try:
+                                    garrison_ids |= parse_wall_garrison_from_1002(p2_direct)
+                                    server_unlocked_barb_lvl = parse_unlocked_barb_level_from_1002(p2_direct)
+                                except Exception as e_dyn:
+                                    logger.debug(f"[COMBAT] 1002 direct dynamic-hero note: {e_dyn}")
+
+                        # Zero-config dynamic hero roster interception (Opcode 1201/1157)
+                        if op == OP_HERO_CATALOGUE and isinstance(it.get(2), bytes):
+                            try:
+                                parsed_1201 = parse_heroes_from_1201(it.get(2))
+                                if parsed_1201:
+                                    log(f"[HERO_DISCOVERY] Opcode 1201: intercepted {len(parsed_1201)} unlocked commander entries from login stream.")
+                            except Exception as e_1201:
+                                logger.debug(f"[COMBAT] 1201 parse note: {e_1201}")
+                        elif op == OP_HERO_ROSTER_SUPPLEMENT and isinstance(it.get(2), bytes):
+                            try:
+                                parsed_1157 = parse_roster_from_1157(it.get(2))
+                                if parsed_1157:
+                                    log(f"[HERO_DISCOVERY] Opcode 1157: intercepted {len(parsed_1157)} supplemental roster entries.")
+                            except Exception as e_1157:
+                                logger.debug(f"[COMBAT] 1157 parse note: {e_1157}")
+
+                        # Garrison sync fallback from Opcode 125
+                        if op == 125 and not troops_in_city:
+                            p = ProtobufCodec.decode_message(it.get(2, b"")) if isinstance(it.get(2), bytes) else it.get(2, {})
+                            items = p.get(1, [])
+                            if not isinstance(items, list): items = [items]
+                            for it_b in items:
+                                if isinstance(it_b, bytes):
+                                    sub_it = ProtobufCodec.decode_message(it_b)
+                                    sub2_raw = sub_it.get(2)
+                                    if isinstance(sub2_raw, bytes):
+                                        sub2 = ProtobufCodec.decode_message(sub2_raw)
+                                        ut = sub2.get(1, 0)
+                                        cnt = sub2.get(2, 0)
+                                        if ut > 0 and cnt > 0:
+                                            troops_in_city[ut] = cnt
+
+                        # Active marches (busy commanders) from 1005 / 1023
+                        elif op in (1005, 1023):
+                            p2 = it.get(2)
+                            if isinstance(p2, bytes):
+                                march_pattern = str(target_role_id).encode() + rb"_\d+_(\d+)(?:_(\d+))?"
+                                for match in re.finditer(march_pattern, p2):
+                                    busy_heroes.add(int(match.group(1).decode()))
+                                    if match.group(2):
+                                        busy_heroes.add(int(match.group(2).decode()))
+
+                except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                    break
+
+            for hid in db_unlocked_heroes:
+                if hid not in available_heroes:
+                    available_heroes.append(hid)
+
+            # ---- Zero-config dynamic roster resolution ----
+            # 1) Live-discovered (1201 + 1157) takes priority, then legacy extraction,
+            #    then DB. Static tables are NOT injected anymore.
+            live_roster = merge_rosters(parsed_1201 or [], parsed_1157 or [])
+            if live_roster:
+                for h in live_roster:
+                    if h["hero_id"] not in available_heroes:
+                        available_heroes.append(h["hero_id"])
+
+            # Filter out wall-garrison heroes BEFORE anything uses the roster
+            pre_garrison = len(available_heroes)
+            available_heroes = [h for h in available_heroes if h not in garrison_ids]
+            if garrison_ids:
+                log(f"[HERO_DISCOVERY] Wall garrison excluded from dispatch pool: {sorted(garrison_ids)} ({pre_garrison - len(available_heroes)} hero(es) filtered).")
+
+            # Persist discovered roster (SQLite + accounts_fleet.json for the gathering engine bridge)
+            if live_roster:
+                try:
+                    persist_roster_to_db(target_role_id, live_roster, garrison_ids, source="live_1201_1157")
+                except Exception as e_persist:
+                    logger.debug(f"[COMBAT] roster persist note: {e_persist}")
+
+            # Expose discovery state to the caller (socket_worker) via optional cookie dict
+            _cookie = kwargs.get("_hero_discovery_state")
+            if isinstance(_cookie, dict):
+                _cookie.clear()
+                _cookie.update({
+                    "roster": live_roster,
+                    "garrison": set(garrison_ids),
+                    "server_unlocked_barb_level": server_unlocked_barb_lvl,
+                    "op1201_count": len(parsed_1201),
+                    "op1157_count": len(parsed_1157),
+                })
+
+            total_troops = sum(troops_in_city.values())
+            disp_coords = (round(discovered_city_coords[0] / 6.0, 1), round(discovered_city_coords[1] / 6.0, 1))
+            ap_str = f"{current_ap}" if current_ap is not None else "Unknown"
+            log(f"[COMBAT] Governor state: City Tile {disp_coords} (Wire {discovered_city_coords}) | Available Army: {total_troops:,} units | Unlocked Heroes: {len(available_heroes)} | Alliance: #{active_alliance_id} | AP: {ap_str}")
+
+            # 4. Resolve Target Level
+            clamped_level = 6
+            req_str = str(highest_barb_level or target_level or "Max Unlocked").strip()
+            if req_str.lower() in ("max unlocked", "max", "أعلى مستوى مفتوح", "0"):
+                # Server ground truth first: unlocked barbarian level from Opcode 1002 Tag 15.
+                if server_unlocked_barb_lvl is not None and server_unlocked_barb_lvl > 0:
+                    clamped_level = min(25, server_unlocked_barb_lvl + 1)
+                    log(f"[COMBAT] Target Level auto-clamped from live server (1002 Tag 15): {server_unlocked_barb_lvl} unlocked -> Level {clamped_level}")
+                else:
+                    clamped_level = 11
+                    log(f"[COMBAT] Target Level set to Max Unlocked: Level {clamped_level}")
+            else:
+                try:
+                    num_part = req_str.upper().replace("L", "").replace("LEVEL", "").strip()
+                    clamped_level = int(num_part)
+                except Exception:
+                    clamped_level = 6
+                log(f"[COMBAT] Target Level set to configured: Level {clamped_level}")
+
+            if skip_barbs_below and str(skip_barbs_below).lower() not in ("none", "null", ""):
+                try:
+                    floor_val = int(str(skip_barbs_below).upper().replace("L", "").strip())
+                    if clamped_level < floor_val:
+                        clamped_level = floor_val
+                        log(f"[COMBAT] Clamped level raised to floor (skip barbs below {floor_val}) -> Level {clamped_level}")
+                except Exception:
+                    pass
+
+            clamped_level = max(1, min(25, int(clamped_level)))
+
+            # 5. Resolve March Queues & Eligible Commanders
+            # Zero-config: use ONLY genuinely discovered heroes (live 1201/1157, 1002
+            # containers, or DB). NO static farm-hero injection anymore.
+            free_heroes = [h for h in available_heroes if h not in busy_heroes]
+            if not free_heroes and not live_roster:
+                # Last-resort emergency fallback when nothing was discovered anywhere.
+                log("[COMBAT] ⚠️ No heroes discovered from any source; using emergency static fallback.")
+                for h in COMBAT_HEROES_PREFERENCE:
+                    if h not in free_heroes and h not in busy_heroes:
+                        free_heroes.append(h)
+
+            if dispatch_all_marches:
+                num_marches = min(int(max_marches or 5), max(1, len(free_heroes)))
+            else:
+                num_marches = 1
+
+            log(f"[COMBAT] Multi-March configuration: Deploying {num_marches} simultaneous march queue(s) across {combat_rounds} round(s).")
+
+            def encode_point(x: float, y: float) -> bytes:
+                return b"\x0d" + struct.pack("<f", float(x)) + b"\x15" + struct.pack("<f", float(y))
+
+            def build_map_request(center_pos: Tuple[float, float]) -> bytes:
+                f1 = encode_point(center_pos[0], center_pos[1])
+                payload = ProtobufCodec.encode_message({1: f1, 2: 0, 5: 1})
+                return ProtobufCodec.encode_message({1: OP_MAP_VIEWPORT_REQ, 2: payload})
+
+            total_marches_dispatched = 0
+            rounds_completed = 0
+            claimed_target_eids = set()
+            combat_skip_reason: Optional[str] = None
+
+            async def count_active_marches() -> int:
+                """
+                Poll the gateway (1004 viewport -> 1005 march sync) and count OUR
+                marches currently away from the city. 0 = every troop is home.
+                March records embed strings like '<role_id>_<march_idx>_...'.
+                """
+                try:
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(build_map_request(discovered_city_coords))))
+                    await writer.drain()
+                except Exception:
+                    return -1
+                active: set = set()
+                march_pattern = re.compile(str(target_role_id).encode() + rb"_(\d+)")
+                deadline = asyncio.get_event_loop().time() + 3.0
+                while asyncio.get_event_loop().time() < deadline:
+                    try:
+                        rh = await asyncio.wait_for(reader.readexactly(2), timeout=0.5)
+                        rl = (rh[0] << 8) | rh[1]
+                        raw = await asyncio.wait_for(reader.readexactly(rl), timeout=0.5)
+                        dec = c_rx.decrypt(raw)
+                        decomp = safe_decompress(dec)
+                        m = ProtobufCodec.decode_message(decomp)
+                        chunks = m.get(1) if isinstance(m.get(1), list) else [m]
+                        for c in chunks:
+                            it = ProtobufCodec.decode_message(c) if isinstance(c, bytes) else c
+                            if not isinstance(it, dict):
+                                continue
+                            if it.get(1) in (1005, 1023) and isinstance(it.get(2), bytes):
+                                for match in march_pattern.finditer(it.get(2)):
+                                    active.add(match.group(1))
+                    except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                        continue
+                    except Exception:
+                        break
+                return len(active)
+
+            # 6. Combat Rounds Loop
+            for round_num in range(1, int(combat_rounds) + 1):
+                log(f"🏹 [COMBAT ROUND {round_num}/{combat_rounds}] Searching for Barbarians around city...")
+
+                # Step A: Request Map Viewport to ingest all roaming barbarians already in the area!
+                writer.write(FrameParser.build_frame(c_tx.encrypt(build_map_request(discovered_city_coords))))
+                await writer.drain()
+
+                found_barbarians: List[Dict[str, Any]] = []
+
+                # Step B: Settle 2.5s to ingest Opcode 1003 map stream
+                vp_deadline = asyncio.get_event_loop().time() + 2.5
+                while asyncio.get_event_loop().time() < vp_deadline:
+                    try:
+                        rh = await asyncio.wait_for(reader.readexactly(2), timeout=0.4)
+                        rl = (rh[0] << 8) | rh[1]
+                        raw = await asyncio.wait_for(reader.readexactly(rl), timeout=0.4)
+                        dec = c_rx.decrypt(raw)
+                        decomp = safe_decompress(dec)
+                        m = ProtobufCodec.decode_message(decomp)
+                        chunks = m.get(1) if isinstance(m.get(1), list) else [m]
+                        for c in chunks:
+                            it = ProtobufCodec.decode_message(c) if isinstance(c, bytes) else c
+                            if not isinstance(it, dict): continue
+                            op = it.get(1)
+                            if op == OP_MAP_VIEWPORT_STREAM:
+                                nearby_barbs = CombatEngine.parse_all_barbarians_from_1003(
+                                    it.get(2, b""),
+                                    discovered_city_coords[0],
+                                    discovered_city_coords[1]
+                                )
+                                # STRICT FILTER: only realistic attack radius (<= 12 km),
+                                # not already claimed this session, and (fleet-wide) not
+                                # claimed by another account/session within the TTL.
+                                # Our own spawns bypass this legitimately: they enter
+                                # found_barbarians via our own spawn collector.
+                                for b in nearby_barbs:
+                                    b_dist = b.get("dist") or round(math.hypot(b["x"] - discovered_city_coords[0], b["y"] - discovered_city_coords[1]) / 6.0, 2)
+                                    b["dist"] = b_dist
+                                    # UNIFIED claim check: ANY barb (roaming or spawn-broadcast)
+                                    # already owned by another account within TTL is skipped.
+                                    if b_dist <= 12.0 and b["entity_id"] not in claimed_target_eids and not any(fb["entity_id"] == b["entity_id"] for fb in found_barbarians) and not is_barb_claimed(b["entity_id"]):
+                                        found_barbarians.append(b)
+                    except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                        break
+
+                if found_barbarians:
+                    log(f"[COMBAT] Discovered {len(found_barbarians)} roaming barbarian(s) within 12km in city vicinity from map viewport.")
+
+                # Helper to spawn a barbarian via Opcode 1178
+                async def do_spawn_barbarian(target_lvl: int) -> List[Dict[str, Any]]:
+                    nonlocal current_ap
+                    if current_ap is not None and current_ap < 40:
+                        log(f"[COMBAT] Insufficient AP for spawn (AP: {current_ap} < 40).")
+                        return []
+                    log(f"[COMBAT] Requesting Barbarian Spawn via Opcode 1178 (Level {target_lvl})...")
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({
+                        1: OP_SEARCH_BARBARIAN,
+                        2: CombatEngine.build_search_barbarian_payload(target_lvl)
+                    }))))
+                    await writer.drain()
+
+                    new_targets = []
+                    spawn_rejections = 0
+                    collect_deadline = asyncio.get_event_loop().time() + 2.5
+                    while asyncio.get_event_loop().time() < collect_deadline:
+                        try:
+                            rh = await asyncio.wait_for(reader.readexactly(2), timeout=0.4)
+                            rl = (rh[0] << 8) | rh[1]
+                            raw = await asyncio.wait_for(reader.readexactly(rl), timeout=0.4)
+                            dec = c_rx.decrypt(raw)
+                            decomp = safe_decompress(dec)
+                            m = ProtobufCodec.decode_message(decomp)
+                            chunks = m.get(1) if isinstance(m.get(1), list) else [m]
+                            for c in chunks:
+                                it = ProtobufCodec.decode_message(c) if isinstance(c, bytes) else c
+                                if not isinstance(it, dict): continue
+                                op = it.get(1)
+                                p_body = it.get(2)
+                                p_dec = ProtobufCodec.decode_message(p_body) if isinstance(p_body, bytes) else p_body
+
+                                if op == 1 and isinstance(p_dec, dict):
+                                    # Log ANY server error envelope during spawn collection
+                                    # (the rejection key is not always OP_SEARCH_BARBARIAN)
+                                    err_op = p_dec.get(1)
+                                    err_code = p_dec.get(2)
+                                    log(f"[COMBAT] Server error during spawn: op={err_op} code={err_code}")
+                                    if err_op == OP_SEARCH_BARBARIAN and err_code in (135, 155, 201):
+                                        if current_ap is not None:
+                                            current_ap = max(0, current_ap - 40)
+                                    spawn_rejections += 1
+                                    break
+
+                                if op == OP_BARBARIAN_SEARCH_RESP:
+                                    spawns = CombatEngine.parse_all_barbarian_search_resps(it.get(2, b""))
+                                    for sp in spawns:
+                                        sp_dist = round(math.hypot(sp["x"] - discovered_city_coords[0], sp["y"] - discovered_city_coords[1]) / 6.0, 2)
+                                        sp["dist"] = sp_dist
+                                        # Spawned barbs are city-private: accept up to 20km
+                                        if sp_dist <= 20.0 and sp["entity_id"] not in claimed_target_eids and not any(fb["entity_id"] == sp["entity_id"] for fb in found_barbarians) and not any(fb["entity_id"] == sp["entity_id"] for fb in new_targets):
+                                            # ATOMIC CLAIM GATE: the 1179 response is ours,
+                                            # but a concurrently-spawning neighbour's barb can
+                                            # arrive as a 1023 broadcast — first claim wins.
+                                            if try_claim_barb(sp["entity_id"], target_role_id, ttl=BARB_CLAIM_TTL):
+                                                if not sp.get("level"):
+                                                    sp["level"] = target_lvl
+                                                new_targets.append(sp)
+                                                if current_ap is not None:
+                                                    current_ap = max(0, current_ap - 40)
+                                            else:
+                                                log(f"🚫 [COMBAT] Spawn #{sp['entity_id']} already owned by another account — ignored.")
+                                elif op == OP_OBJECT_SPAWN:
+                                    sp = CombatEngine.parse_barbarian_spawn(it.get(2, b""))
+                                    if sp:
+                                        sp_dist = round(math.hypot(sp["x"] - discovered_city_coords[0], sp["y"] - discovered_city_coords[1]) / 6.0, 2)
+                                        sp["dist"] = sp_dist
+                                        # Spawned barbs are city-private: accept up to 20km
+                                        # 1023 is a GLOBAL broadcast (every nearby city's
+                                        # spawns reach us!). Without the atomic gate, all 10
+                                        # accounts captured the same spawn and marched together.
+                                        if sp_dist <= 20.0 and sp["entity_id"] not in claimed_target_eids and not any(fb["entity_id"] == sp["entity_id"] for fb in found_barbarians) and not any(fb["entity_id"] == sp["entity_id"] for fb in new_targets):
+                                            if try_claim_barb(sp["entity_id"], target_role_id, ttl=BARB_CLAIM_TTL):
+                                                sp["level"] = target_lvl
+                                                new_targets.append(sp)
+                                                if current_ap is not None:
+                                                    current_ap = max(0, current_ap - 40)
+                                            else:
+                                                log(f"🚫 [COMBAT] Broadcast spawn #{sp['entity_id']} belongs to another account — ignored.")
+                        except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                            break
+                        except Exception:
+                            break
+                    return new_targets
+
+                # Step C (SPAWN-FIRST): every city spawns ITS OWN dedicated barbarians
+                # via Opcode 1178. Spawned barbs are city-private (never contested by
+                # the other 9 farm accounts). Roaming barbs are only a fallback pool.
+                # (num_marches is the configured queue count; actual_marches is computed
+                #  later per-round from free heroes.)
+                # PACED + DESCENDING-LEVEL: rapid-fire spawns get silently rate-limited
+                # by the gateway, so space attempts ~1.5s apart and step the level down
+                # when a level refuses (some cities cap spawns per level window).
+                spawn_target_count = num_marches
+                spawned_count = sum(1 for b in found_barbarians if b.get("source") != "map_1003")
+                if spawned_count < spawn_target_count:
+                    log(f"[COMBAT] Spawn-first: requesting {spawn_target_count - spawned_count} dedicated barbarian(s) (starting L{clamped_level}) for this city...")
+                    attempts = 0
+                    max_attempts = spawn_target_count * 3
+                    lvl_cursor = clamped_level
+                    while spawned_count < spawn_target_count and attempts < max_attempts:
+                        attempts += 1
+                        new_sp = await do_spawn_barbarian(lvl_cursor)
+                        if new_sp:
+                            found_barbarians.extend(new_sp)
+                            spawned_count = sum(1 for b in found_barbarians if b.get("source") != "map_1003")
+                            await asyncio.sleep(1.2)
+                        else:
+                            # Step level down one notch (min 1) before the next try
+                            lvl_cursor = max(1, lvl_cursor - 1)
+                            await asyncio.sleep(1.5)
+                    log(f"[COMBAT] Spawn-first result: {spawned_count}/{spawn_target_count} dedicated barbs spawned" + ("; filling the rest from unclaimed roaming barbs." if spawned_count < spawn_target_count else " ✓"))
+
+                if not found_barbarians:
+                    log(f"[COMBAT] ⚠️ No barbarians found around city in Round {round_num}. Waiting 5s before next attempt...")
+                    await asyncio.sleep(5.0)
+                    continue
+
+                # Sort and filter barbarians by distance and configured level
+                for b in found_barbarians:
+                    if "dist" not in b:
+                        b["dist"] = round(math.hypot(b["x"] - discovered_city_coords[0], b["y"] - discovered_city_coords[1]) / 6.0, 2)
+
+                floor_lvl = 1
+                if skip_barbs_below and str(skip_barbs_below).lower() not in ("none", "null", ""):
+                    try:
+                        floor_lvl = int(str(skip_barbs_below).upper().replace("L", "").strip())
+                    except Exception:
+                        floor_lvl = 1
+
+                # Level match: user-requested level first; level filter applies to
+                # ROAMING barbs only. Spawned barbs are always acceptable (they were
+                # created at clamped_level by request; treat their level as theirs).
+                spawned_pool = [b for b in found_barbarians if b.get("source") != "map_1003"]
+                roaming_pool = [b for b in found_barbarians if b.get("source") == "map_1003"]
+
+                def _roam_ok(b):
+                    try:
+                        lvl = int(b.get("level", 1))
+                    except Exception:
+                        lvl = 1
+                    # Accept levels within ±3 of the target (server cap enforced anyway
+                    # by Error 1021 handling). Prevents starving when few barbs exist.
+                    return lvl <= clamped_level + 3
+
+                roaming_ok = [b for b in roaming_pool if _roam_ok(b)]
+                pool = spawned_pool + roaming_ok
+
+                def _pool_key(b):
+                    try:
+                        lvl_gap = abs(int(b.get("level", 1)) - clamped_level)
+                    except Exception:
+                        lvl_gap = 99
+                    return (0 if b.get("source") != "map_1003" else 1, lvl_gap, float(b.get("dist", 99)))
+
+                pool.sort(key=_pool_key)
+                found_barbarians = pool
+
+                log(f"[COMBAT] Round {round_num}: Confirmed {len(found_barbarians)} target barbarian(s) within {found_barbarians[0]['dist']}km - {found_barbarians[-1]['dist']}km.")
+
+                # Dispatch marches against REAL barbarians
+                used_commanders = set()
+                round_dispatches = 0
+                # Check AP constraint before dispatching attacks against barbarians
+                if current_ap is not None and current_ap < 40:
+                    combat_skip_reason = f"insufficient AP ({current_ap} < 40)"
+                    log(f"[COMBAT] Insufficient AP for attack (AP: {current_ap} < 40), skipping combat.")
+                    break
+
+                # Determine how many marches we can actually send (limited by unlocked heroes)
+                actual_marches = min(num_marches, max(1, len(free_heroes)))
+                march_idx = 1
+                consecutive_target_fails = 0
+
+                while march_idx <= actual_marches and consecutive_target_fails < 5:
+                    if not found_barbarians:
+                        # Attempt to spawn on the fly if queues need more targets
+                        log(f"[COMBAT] March queue {march_idx}/{actual_marches}: Requesting fresh target spawn...")
+                        sp = await do_spawn_barbarian(clamped_level)
+                        if sp:
+                            found_barbarians.extend(sp)
+                        else:
+                            log(f"[COMBAT] March queue {march_idx}: No further targets obtainable.")
+                            break
+
+                    target_info = found_barbarians.pop(0)
+                    t_eid = target_info["entity_id"]
+                    t_pos = (target_info["x"], target_info["y"])
+                    t_lvl = target_info.get("level") or clamped_level
+                    t_dist = target_info.get("dist") or round(math.hypot(t_pos[0] - discovered_city_coords[0], t_pos[1] - discovered_city_coords[1]) / 6.0, 1)
+
+                    claimed_target_eids.add(t_eid)
+                    # Final atomic gate at dispatch: if another account claimed this
+                    # barb between discovery and dispatch, drop it and pick the next.
+                    if not try_claim_barb(t_eid, target_role_id, ttl=BARB_CLAIM_TTL):
+                        log(f"🚫 [COMBAT] Target #{t_eid} was just claimed by another account — switching to a different barbarian...")
+                        # Restore troops untouched; nothing was allocated yet
+                        continue
+
+                    # Allocate troops SCALED TO THE BARBARIAN'S LEVEL POWER (never a fixed 5,000)
+                    # Infantry/Archer/Cavalry first, Siege (ut%4==0) LAST.
+                    barb_budget = TROOP_BUDGET_BY_BARB_LEVEL.get(int(t_lvl) if t_lvl else 6, 35_000)
+                    remaining_city = sum(troops_in_city.values()) if troops_in_city else 0
+                    marches_left = max(1, actual_marches - march_idx + 1)
+                    if remaining_city <= barb_budget * marches_left:
+                        # Not enough for full power everywhere -> fair split across remaining queues
+                        target_budget = max(500, remaining_city // marches_left)
+                    else:
+                        target_budget = barb_budget
+                    log(f"[COMBAT] Troop budget for Barb L{t_lvl}: {target_budget:,} (level table: {barb_budget:,} | city remaining: {remaining_city:,})")
+                    march_troops: List[Tuple[int, int]] = []
+                    curr_alloc = 0
+
+                    sorted_u = sorted(troops_in_city.items(), key=lambda x: 1 if (x[0] % 4 == 0) else 0)
+                    for ut, avail in sorted_u:
+                        if curr_alloc >= target_budget or avail <= 0: break
+                        take = min(avail, target_budget - curr_alloc)
+                        if take > 0:
+                            march_troops.append((ut, take))
+                            curr_alloc += take
+                            troops_in_city[ut] = avail - take
+
+                    if not march_troops:
+                        if troops_in_city:
+                            for u, a in sorted_u:
+                                if a > 0:
+                                    march_troops = [(u, min(a, max(500, target_budget)))]
+                                    curr_alloc = march_troops[0][1]
+                                    troops_in_city[u] = a - curr_alloc
+                                    break
+                        if not march_troops:
+                            march_troops = [(1, 500)]
+                            curr_alloc = 500
+
+                    # 1. Map Viewport to Barbarian Coordinates
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(build_map_request(t_pos))))
+                    await writer.drain()
+                    await asyncio.sleep(0.1)
+
+                    # 2. Inspect target via Opcode 1050 (Field 1 encodes alliance_id, NEVER role_id)
+                    inspect_pkt = ProtobufCodec.encode_message({
+                        1: OP_INSPECT_TARGET,
+                        2: CombatEngine.build_target_inspect_payload(
+                            target_entity_id=int(t_eid),
+                            city_x=discovered_city_coords[0],
+                            city_y=discovered_city_coords[1],
+                            target_x=t_pos[0],
+                            target_y=t_pos[1],
+                            alliance_id=active_alliance_id
+                        )
+                    })
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(inspect_pkt)))
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(bytes.fromhex("089d0712020800"))))
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(bytes.fromhex("08a70312020800"))))
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(bytes.fromhex("08fe4b1200"))))
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(bytes.fromhex("08091200"))))
+                    await writer.drain()
+
+                    # Wait for Opcode 1051 or Opcode 1 (Error)
+                    inspect_ok = False
+                    inspect_err = None
+                    deadline_1050 = asyncio.get_event_loop().time() + 2.0
+                    while asyncio.get_event_loop().time() < deadline_1050:
+                        try:
+                            rh = await asyncio.wait_for(reader.readexactly(2), timeout=0.3)
+                            rl = (rh[0] << 8) | rh[1]
+                            raw_b = await asyncio.wait_for(reader.readexactly(rl), timeout=0.3)
+                            dec = c_rx.decrypt(raw_b)
+                            data = safe_decompress(dec)
+                            m = ProtobufCodec.decode_message(data)
+                            chunks = m.get(1) if isinstance(m.get(1), list) else [m]
+                            for c in chunks:
+                                it = ProtobufCodec.decode_message(c) if isinstance(c, bytes) else c
+                                if not isinstance(it, dict): continue
+                                op = it.get(1)
+                                if op == 1051:
+                                    inspect_ok = True
+                                    break
+                                if op == 1:
+                                    p_body = it.get(2)
+                                    p_dec = ProtobufCodec.decode_message(p_body) if isinstance(p_body, bytes) else p_body
+                                    if isinstance(p_dec, dict) and p_dec.get(1) == OP_INSPECT_TARGET:
+                                        inspect_err = p_dec.get(2)
+                                        break
+                            if inspect_ok or inspect_err is not None:
+                                break
+                        except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                            continue
+                        except Exception:
+                            break
+
+                    if not inspect_ok or inspect_err is not None:
+                        log(f"⚠️ [COMBAT] Target Barbarian #{t_eid} inspect unconfirmed (missing 1051 or error {inspect_err}). Skipping stale candidate...")
+                        # Restore troops for next candidate
+                        for ut, cnt in march_troops:
+                            troops_in_city[ut] = troops_in_city.get(ut, 0) + cnt
+                        consecutive_target_fails += 1
+                        continue
+
+                    # 3. Send SendTroopConfirm via Opcode 8
+                    writer.write(FrameParser.build_frame(c_tx.encrypt(CombatEngine.build_send_troop_confirm())))
+                    await writer.drain()
+                    await asyncio.sleep(0.05)
+
+                    # Build candidate commander list for this march (ranked from live/DB roster)
+                    # Skip pairings already rejected for THIS target (used_commanders may
+                    # contain (hero_id, target_eid) tuples from 155/156 failures).
+                    _failed_pairs = {x for x in used_commanders if isinstance(x, tuple)}
+                    avail_commanders = [h for h in free_heroes
+                                        if h not in used_commanders and (h, t_eid) not in _failed_pairs]
+                    if not avail_commanders:
+                        avail_commanders = [h for h in COMBAT_HEROES_PREFERENCE
+                                            if h not in used_commanders and (h, t_eid) not in _failed_pairs]
+
+                    if primary_commander and primary_commander != "Auto":
+                        cfg_id = COMMANDER_NAME_TO_ID.get(primary_commander)
+                        if cfg_id and cfg_id in avail_commanders:
+                            avail_commanders.remove(cfg_id)
+                            avail_commanders.insert(0, cfg_id)
+                    else:
+                        # Dynamic ranking: heroes present in the discovered roster first
+                        # (combat-ranked by level/star via hero_parser), then unknowns.
+                        roster_ids = {h["hero_id"] for h in live_roster} if live_roster else set()
+                        known_avail = [h for h in avail_commanders if h in roster_ids and h in available_heroes]
+                        other_avail = [h for h in avail_commanders if h not in known_avail]
+                        avail_commanders = known_avail + other_avail
+
+                    dispatch_ok = False
+                    march_err = None
+
+                    for prim_hero_id in list(avail_commanders):
+                        used_commanders.add(prim_hero_id)
+
+                        # Secondary Commander: Only attach if explicitly named by user (never by default on farm/under-leveled heroes)
+                        sec_hero_id = 0
+                        if secondary_commander and str(secondary_commander).strip().lower() not in ("none", "auto", "auto (best available)", "null", ""):
+                            sec_candidates = [h for h in free_heroes if h not in used_commanders and h != prim_hero_id]
+                            cfg_sec = COMMANDER_NAME_TO_ID.get(secondary_commander)
+                            if cfg_sec and cfg_sec in sec_candidates:
+                                sec_hero_id = cfg_sec
+
+                        if sec_hero_id > 0:
+                            used_commanders.add(sec_hero_id)
+
+                        prim_name = COMMANDER_NAMES.get(prim_hero_id, f"Hero #{prim_hero_id}")
+                        sec_name = COMMANDER_NAMES.get(sec_hero_id, f"Hero #{sec_hero_id}") if sec_hero_id else "None"
+
+                        # 4. Dispatch Combat March via Opcode 1012
+                        dispatch_pkt = ProtobufCodec.encode_message({
+                            1: OP_DISPATCH_MARCH,
+                            2: CombatEngine.build_combat_dispatch_payload(
+                                target_entity_id=int(t_eid),
+                                primary_commander_id=prim_hero_id,
+                                secondary_commander_id=sec_hero_id,
+                                troops=march_troops,
+                                march_index=march_idx
+                            )
+                        })
+                        writer.write(FrameParser.build_frame(c_tx.encrypt(dispatch_pkt)))
+                        await writer.drain()
+
+                        # 5. Wait for REAL Gateway ACK / March Confirmation
+                        ack_deadline = asyncio.get_event_loop().time() + 3.0
+                        while asyncio.get_event_loop().time() < ack_deadline:
+                            try:
+                                rh = await asyncio.wait_for(reader.readexactly(2), timeout=0.4)
+                                rl = (rh[0] << 8) | rh[1]
+                                raw = await asyncio.wait_for(reader.readexactly(rl), timeout=0.4)
+                                dec = c_rx.decrypt(raw)
+                                decomp = safe_decompress(dec)
+                                m = ProtobufCodec.decode_message(decomp)
+                                chunks = m.get(1) if isinstance(m.get(1), list) else [m]
+                                for c in chunks:
+                                    it = ProtobufCodec.decode_message(c) if isinstance(c, bytes) else c
+                                    if not isinstance(it, dict): continue
+                                    op = it.get(1)
+                                    p_body = it.get(2)
+                                    p_dec = ProtobufCodec.decode_message(p_body) if isinstance(p_body, bytes) else p_body
+
+                                    # Real March creation / spawn confirmations
+                                    if op in (1013, 1024, 903, 365, 1005, 1023):
+                                        dispatch_ok = True
+                                        break
+                                    if op == 1 and isinstance(p_dec, dict):
+                                        if p_dec.get(1) == OP_DISPATCH_MARCH:
+                                            code = p_dec.get(2, -1)
+                                            if code in (0, 1):
+                                                dispatch_ok = True
+                                                break
+                                            else:
+                                                march_err = code
+                                                break
+                                if dispatch_ok or march_err is not None:
+                                    break
+                            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                                continue
+                            except Exception:
+                                break
+
+                        if dispatch_ok:
+                            log(f"⚔️ [ROUND {round_num} | MARCH {march_idx}/{actual_marches}] Dispatched: {prim_name}" +
+                                (f" + {sec_name}" if sec_hero_id else "") +
+                                f" with {curr_alloc:,} troops -> Barbarian Lvl {t_lvl} (#{t_eid}) at {t_dist}km ✓")
+                            round_dispatches += 1
+                            total_marches_dispatched += 1
+                            march_idx += 1
+                            consecutive_target_fails = 0
+                            break
+                        elif march_err in (155, 156, 135) and sec_hero_id > 0:
+                            # Secondary hero disallowed or causing conflict. Strip secondary and retry solo primary!
+                            log(f"⚠️ [COMBAT] Gateway rejected secondary commander #{sec_hero_id} (code {march_err}). Retrying {prim_name} solo...")
+                            used_commanders.discard(sec_hero_id)
+                            sec_hero_id = 0
+                            sec_name = "None"
+                            # Re-dispatch solo primary immediately
+                            dispatch_pkt = ProtobufCodec.encode_message({
+                                1: OP_DISPATCH_MARCH,
+                                2: CombatEngine.build_combat_dispatch_payload(
+                                    target_entity_id=int(t_eid),
+                                    primary_commander_id=prim_hero_id,
+                                    secondary_commander_id=0,
+                                    troops=march_troops,
+                                    march_index=march_idx
+                                )
+                            })
+                            writer.write(FrameParser.build_frame(c_tx.encrypt(dispatch_pkt)))
+                            await writer.drain()
+                            ack_deadline = asyncio.get_event_loop().time() + 3.0
+                            retry_ok = False
+                            retry_err = None
+                            while asyncio.get_event_loop().time() < ack_deadline:
+                                try:
+                                    rh = await asyncio.wait_for(reader.readexactly(2), timeout=0.4)
+                                    rl = (rh[0] << 8) | rh[1]
+                                    raw = await asyncio.wait_for(reader.readexactly(rl), timeout=0.4)
+                                    dec = c_rx.decrypt(raw)
+                                    decomp = safe_decompress(dec)
+                                    m = ProtobufCodec.decode_message(decomp)
+                                    for it in unpack_frames(m):
+                                        op = it.get(1)
+                                        p_body = it.get(2)
+                                        p_dec = ProtobufCodec.decode_message(p_body) if isinstance(p_body, bytes) else p_body
+                                        if op in (1013, 1024, 903, 365, 1005, 1023):
+                                            retry_ok = True
+                                            break
+                                        if op == 1 and isinstance(p_dec, dict) and p_dec.get(1) == OP_DISPATCH_MARCH:
+                                            code = p_dec.get(2, -1)
+                                            if code in (0, 1):
+                                                retry_ok = True
+                                                break
+                                            else:
+                                                retry_err = code
+                                                break
+                                    if retry_ok or retry_err is not None: break
+                                except Exception: break
+                            if retry_ok:
+                                dispatch_ok = True
+                                log(f"⚔️ [ROUND {round_num} | MARCH {march_idx}/{actual_marches}] Dispatched: {prim_name} with {curr_alloc:,} troops -> Barbarian Lvl {t_lvl} (#{t_eid}) at {t_dist}km ✓")
+                                round_dispatches += 1
+                                total_marches_dispatched += 1
+                                march_idx += 1
+                                consecutive_target_fails = 0
+                                break
+                            elif retry_err == 155:
+                                used_commanders.discard(prim_hero_id)
+                                log(f"⚠️ [COMBAT] Target Barbarian #{t_eid} is invalid or already occupied (Error 155). Retrying with another target...")
+                                break
+                            elif retry_err == 135:
+                                used_commanders.discard(prim_hero_id)
+                                continue
+                            else:
+                                used_commanders.discard(prim_hero_id)
+                                break
+                        elif march_err in (135, 156, 164, 1021, 1022):
+                            # Commander busy/unowned or capacity exceeded - free and try next commander
+                            used_commanders.discard(prim_hero_id)
+                            if sec_hero_id:
+                                used_commanders.discard(sec_hero_id)
+                            log(f"⚠️ [COMBAT] Commander #{prim_hero_id} rejected (code {march_err}). Trying next candidate hero...")
+                            continue
+                        elif march_err == 155:
+                            used_commanders.discard(prim_hero_id)
+                            if sec_hero_id:
+                                used_commanders.discard(sec_hero_id)
+                            # Mark this PAIRING as failed so the same hero is not retried
+                            # on this exact target again (prevents 155 spam loops).
+                            used_commanders.add((prim_hero_id, t_eid))
+                            log(f"⚠️ [COMBAT] Commander #{prim_hero_id} or Target #{t_eid} returned code 155. Trying next hero candidate...")
+                            continue
+                        elif march_err == 156:
+                            # Pairing/level constraint for this hero: mark pairing failed
+                            # and try the next hero candidate on the same target.
+                            used_commanders.discard(prim_hero_id)
+                            if sec_hero_id:
+                                used_commanders.discard(sec_hero_id)
+                            used_commanders.add((prim_hero_id, t_eid))
+                            log(f"⚠️ [COMBAT] Commander #{prim_hero_id} rejected (code 156) for Target #{t_eid}. Trying next hero candidate...")
+                            continue
+                        else:
+                            # Other error or timeout: exhaust this target and move on
+                            used_commanders.discard(prim_hero_id)
+                            if sec_hero_id:
+                                used_commanders.discard(sec_hero_id)
+                            log(f"❌ [COMBAT] Target #{t_eid} exhausted (code {march_err}). Moving to next target...")
+                            break
+
+                    if not dispatch_ok:
+                        # Restore troops on failed dispatch
+                        for ut, cnt in march_troops:
+                            troops_in_city[ut] = troops_in_city.get(ut, 0) + cnt
+                        consecutive_target_fails += 1
+                        if march_err != 155:
+                            log(f"❌ [COMBAT] March slot {march_idx} rejected (Error code: {march_err}). Trying next target...")
+                        await asyncio.sleep(0.5)
+                    else:
+                        await asyncio.sleep(0.8)
+
+                if round_dispatches > 0:
+                    rounds_completed += 1
+
+                    # -----------------------------------------------------------------
+                    # RETURN-HOME VERIFICATION (replaces the old fixed 22/32s sleep):
+                    # battles take 30s-2min, then the march walks back. The gathering
+                    # phase MUST NOT start while troops are away (it would see the
+                    # army as 'all marches in use'). We poll Opcode 1005 until ZERO
+                    # of our marches remain outside the city, then declare completion.
+                    # -----------------------------------------------------------------
+                    is_last_round = (round_num >= int(combat_rounds))
+                    log(f"⏳ [ROUND {round_num} COMPLETE] Deployed {round_dispatches} combat march(es). Polling Opcode 1005 until every march is physically back home...")
+                    ret_deadline = asyncio.get_event_loop().time() + 420
+                    last_count = -1
+                    timed_out = True
+                    while asyncio.get_event_loop().time() < ret_deadline:
+                        active_m = await count_active_marches()
+                        if active_m == 0:
+                            timed_out = False
+                            log("✅ [COMBAT RETURN] All marches confirmed back home (0 active in Opcode 1005). Troops are FREE for gathering.")
+                            break
+                        if active_m != last_count:
+                            log(f"⏳ [COMBAT RETURN] {active_m} march(es) still away from the city...")
+                            last_count = active_m
+                        await asyncio.sleep(8.0)
+                    if timed_out:
+                        log("⚠️ [COMBAT RETURN] 7-minute wait timeout — some marches may still be returning; reporting to caller.")
+                    await asyncio.sleep(2.0)
+
+                    # Auto-heal troops in hospital after combat
+                    if heal_troops:
+                        try:
+                            log(f"[HOSPITAL] Checking hospital & healing wounded troops {'after final combat round' if is_last_round else 'between rounds'}...")
+                            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: OP_QUERY_WOUNDED, 2: ProtobufCodec.encode_message({1: 1})}))))
+                            await writer.drain()
+                            await asyncio.sleep(0.3)
+
+                            heal_body = bytearray()
+                            heal_body.extend(b"\x0a\x0267")
+                            for u in range(1, 17):
+                                heal_body.extend(b"\x12\x04\x10\x01\x08" + bytes([u]))
+                            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: OP_HEAL_TROOPS, 2: bytes(heal_body)}))))
+                            await writer.drain()
+                            await asyncio.sleep(0.3)
+
+                            writer.write(FrameParser.build_frame(c_tx.encrypt(ProtobufCodec.encode_message({1: OP_ALLIANCE_HELP_REQUEST, 2: bytes.fromhex("12023637080420001800")}))))
+                            await writer.drain()
+                            log("[HOSPITAL] Hospital batch healed & alliance help requested ✓")
+                        except Exception as e_h:
+                            log(f"[HOSPITAL] Auto-heal check note: {e_h}")
+
+            log(f"🏆 [COMBAT FINISHED] Successfully completed {rounds_completed}/{combat_rounds} round(s) with {total_marches_dispatched} total march dispatch(es) against Barbarians!")
+            return {
+                "success": (total_marches_dispatched > 0 or rounds_completed > 0),
+                "rounds_completed": rounds_completed,
+                "total_rounds": combat_rounds,
+                "total_marches": total_marches_dispatched,
+                "level": clamped_level,
+                "city_coords": discovered_city_coords,
+                "reason": combat_skip_reason or ("completed" if total_marches_dispatched > 0 else "no targets or insufficient AP"),
+                "hero_discovery": {
+                    "roster": live_roster,
+                    "garrison": sorted(garrison_ids),
+                    "server_unlocked_barb_level": server_unlocked_barb_lvl,
+                    "op1201_count": len(parsed_1201),
+                    "op1157_count": len(parsed_1157),
+                },
+            }
+
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+
+execute_barbarian_hunt = CombatEngine.execute_barbarian_hunt

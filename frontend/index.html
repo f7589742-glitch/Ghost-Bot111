@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoK Bot | Cloud Fleet Management</title>
+    <script src="/static/js/tailwind.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0c0a15',
+                        panelBg: '#131122',
+                        cardBg: '#161327',
+                        cardHover: '#1c1833',
+                        borderCol: 'rgba(139, 92, 246, 0.18)',
+                        termBg: '#090810'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/gt.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script defer src="/static/js/alpine.min.js"></script>
+</head>
+<body class="bg-[#0c0a15] text-[#e2e0ee] min-h-screen flex flex-col antialiased selection:bg-purple-600 selection:text-white" x-data="rokApp">
+
+    <header class="border-b border-purple-900/20 bg-[#100e1c]/90 backdrop-blur-md sticky top-0 z-40 px-6 py-3">
+        <div class="max-w-[1550px] mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-600/30">
+                    <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+                </div>
+                <div>
+                    <span class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        RoK Bot
+                        <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-900/50 text-purple-300 border border-purple-700/40">Headless Cloud</span>
+                    </span>
+                </div>
+            </div>
+
+            <nav class="flex items-center bg-[#18152b] p-1 rounded-xl border border-purple-900/30">
+                <button @click="currentTab = 'live'" 
+                        :class="currentTab === 'live' ? 'bg-purple-600/30 text-purple-200 border border-purple-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+                        class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+                    <span class="w-2 h-2 rounded-full" :class="botRunning ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'"></span>
+                    Live
+                </button>
+                <button @click="currentTab = 'inventory'" 
+                        :class="currentTab === 'inventory' ? 'bg-purple-600/30 text-purple-200 border border-purple-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+                        class="px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+                    Inventory
+                </button>
+                <button @click="currentTab = 'history'" 
+                        :class="currentTab === 'history' ? 'bg-purple-600/30 text-purple-200 border border-purple-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+                        class="px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+                    History
+                </button>
+                <button @click="currentTab = 'config'" 
+                        :class="currentTab === 'config' ? 'bg-purple-600/30 text-purple-200 border border-purple-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+                        class="px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+                    Config
+                </button>
+                <button @click="currentTab = 'upgrade'" 
+                        :class="currentTab === 'upgrade' ? 'bg-purple-600/30 text-purple-200 border border-purple-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+                        class="px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+                    Upgrade
+                </button>
+            </nav>
+
+            <div class="flex items-center space-x-3">
+                <button @click="toggleBot()" 
+                        :disabled="botStarting"
+                        :class="botRunning 
+                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30' 
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'"
+                        class="px-4 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-sm">
+                    <template x-if="botStarting"><i class="fa-solid fa-spinner fa-spin"></i></template>
+                    <template x-if="!botStarting && botRunning"><i class="fa-solid fa-stop text-rose-400"></i></template>
+                    <template x-if="!botStarting && !botRunning"><i class="fa-solid fa-play text-emerald-400"></i></template>
+                    <span x-text="botRunning ? 'Stop bot' : 'Start bot'"></span>
+                </button>
+                <button @click="openAddAccountModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-md shadow-indigo-600/20">
+                    <i class="fa-solid fa-plus text-xs"></i><span>Add account</span>
+                </button>
+                <button @click="openRssTransferModal()" class="bg-[#211b3b] hover:bg-[#2c2450] text-purple-200 border border-purple-800/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition cursor-pointer">
+                    <i class="fa-solid fa-right-left text-xs text-purple-400"></i><span>RSS Transfer</span>
+                </button>
+                <div class="w-8 h-8 rounded-full bg-purple-900/60 border border-purple-700/50 flex items-center justify-center text-purple-300 text-xs font-bold">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-[1550px] mx-auto w-full flex-1 px-6 py-5">
+
+        <!-- TAB 1: LIVE -->
+        <div x-show="currentTab === 'live'" x-cloak class="space-y-5">
+            <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center justify-between pb-3 mb-2 border-b border-purple-900/20">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-terminal text-purple-400 text-sm"></i>
+                        <h2 class="text-sm font-bold text-slate-200">Recent activity</h2>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[11px] text-slate-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full" :class="wsConnected ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+                            <span x-text="wsConnected ? 'Live stream connected' : 'Reconnecting stream...'"></span>
+                        </span>
+                        <button @click="activityLines = []" class="text-[11px] text-slate-500 hover:text-slate-300 transition" title="Clear console">
+                            <i class="fa-solid fa-eraser"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div id="activity-terminal" class="h-44 overflow-y-auto bg-[#090810] border border-purple-950/60 rounded-xl p-3 font-mono text-xs text-slate-300 space-y-1 select-text">
+                    <template x-if="activityLines.length === 0">
+                        <div class="text-slate-600 italic py-2">No activity logged yet. Start the bot or dispatch a routine task to begin.</div>
+                    </template>
+                    <template x-for="(line, idx) in activityLines" :key="idx">
+                        <div class="term-line" x-html="formatTerminalLine(line)"></div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                </div>
+                <input type="text" x-model="searchQuery" placeholder="Search governor name, ID, or email" class="w-full pl-11 pr-4 py-2.5 bg-[#141124] border border-purple-900/30 focus:border-purple-500 rounded-xl text-xs text-white placeholder-slate-500 outline-none transition shadow-sm">
+                <template x-if="searchQuery">
+                    <button @click="searchQuery = ''" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-500 hover:text-slate-300">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </template>
+            </div>
+
+            <div class="space-y-4">
+                <template x-if="loadingFleet && accounts.length === 0">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-12 text-center text-slate-400">
+                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-purple-400 mb-3"></i>
+                        <p class="text-xs">Loading accounts and characters...</p>
+                    </div>
+                </template>
+
+                <template x-if="!loadingFleet && filteredAccounts.length === 0">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-12 text-center text-slate-400">
+                        <i class="fa-solid fa-user-slash text-3xl text-purple-500/50 mb-3"></i>
+                        <h3 class="text-sm font-bold text-slate-300">No accounts found</h3>
+                        <p class="text-xs text-slate-500 mt-1">Connect your Lilith account using the button above to import your fleet.</p>
+                    </div>
+                </template>
+
+                <template x-for="acc in filteredAccounts" :key="acc.id">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl transition hover:border-purple-900/50">
+                        <div class="flex items-center justify-between pb-3 border-b border-purple-900/20">
+                            <div class="flex items-center gap-3">
+                                <label class="switch">
+                                    <input type="checkbox" :checked="acc.is_active == 1" @change="toggleAccount(acc)">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="font-bold text-slate-100 text-sm" x-text="acc.email"></span>
+                                <span class="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-purple-950/60 text-purple-300 border border-purple-800/40">
+                                    last run <span x-text="acc.last_run_text || 'never'"></span>
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <button class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#201b38] hover:bg-[#292248] text-purple-200 border border-purple-800/40 transition cursor-pointer">
+                                    Summaries
+                                </button>
+                                <div class="relative" x-data="{ open: false }">
+                                    <button @click="open = !open" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#201b38] hover:bg-[#292248] text-purple-200 border border-purple-800/40 flex items-center gap-1.5 transition cursor-pointer">
+                                        <span>Actions</span>
+                                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                                    </button>
+                                    <div x-show="open" @click.outside="open = false" x-cloak class="absolute right-0 mt-1.5 w-44 bg-[#1c1833] border border-purple-800/50 rounded-xl shadow-2xl py-1 z-30 text-xs">
+                                        <button @click="open = false; syncAccount(acc)" class="w-full text-left px-3 py-2 text-slate-200 hover:bg-purple-900/30 flex items-center gap-2">
+                                            <i class="fa-solid fa-arrows-rotate text-purple-400"></i> Sync Characters
+                                        </button>
+                                        <button @click="open = false; showToast('Routine triggered for all governors in this account.', 'info')" class="w-full text-left px-3 py-2 text-slate-200 hover:bg-purple-900/30 flex items-center gap-2">
+                                            <i class="fa-solid fa-bolt text-amber-400"></i> Run All Routine
+                                        </button>
+                                        <button @click="open = false; deleteAccount(acc)" class="w-full text-left px-3 py-2 text-rose-300 hover:bg-rose-900/30 flex items-center gap-2 border-t border-purple-900/30">
+                                            <i class="fa-solid fa-trash-can text-rose-400"></i> Remove Account
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto mt-2">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-purple-900/10">
+                                        <th class="py-2.5 px-3 w-12">ON</th>
+                                        <th class="py-2.5 px-3">GOVERNOR ID</th>
+                                        <th class="py-2.5 px-3">KINGDOM</th>
+                                        <th class="py-2.5 px-3">NAME</th>
+                                        <th class="py-2.5 px-3">CITY HALL</th>
+                                        <th class="py-2.5 px-3">LAST RUN</th>
+                                        <th class="py-2.5 px-3">NEXT RUN</th>
+                                        <th class="py-2.5 px-3 text-right">ACTIONS</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-purple-900/10 text-slate-200">
+                                    <template x-for="char in (acc.characters || [])" :key="char.id">
+                                        <tr class="hover:bg-purple-900/10 transition">
+                                            <td class="py-3 px-3">
+                                                <label class="switch">
+                                                    <input type="checkbox" :checked="char.enabled == 1" @change="toggleCharacter(char)">
+                                                    <span class="slider"></span>
+                                                </label>
+                                            </td>
+                                            <td class="py-3 px-3 font-mono text-purple-300 font-semibold" x-text="char.role_id"></td>
+                                            <td class="py-3 px-3 font-medium text-slate-300">
+                                                <span class="px-2 py-0.5 rounded bg-purple-950/70 border border-purple-800/30" x-text="'#' + char.kingdom_id"></span>
+                                            </td>
+                                            <td class="py-3 px-3">
+                                                <div class="flex items-center gap-2">
+                                                    <template x-if="char.avatar_url">
+                                                        <img :src="char.avatar_url" class="w-6 h-6 rounded-full border border-purple-500/30 object-cover">
+                                                    </template>
+                                                    <template x-if="!char.avatar_url">
+                                                        <div class="w-6 h-6 rounded-full bg-purple-900/40 border border-purple-700/30 flex items-center justify-center text-[10px] text-purple-300 font-bold" x-text="(char.name || 'G')[0]"></div>
+                                                    </template>
+                                                    <span class="font-bold text-slate-100" x-text="char.name || 'Unnamed'"></span>
+                                                    <template x-if="char.alliance_tag">
+                                                        <span class="text-[10px] text-amber-400 font-bold" x-text="'[' + char.alliance_tag + ']'"></span>
+                                                    </template>
+                                                </div>
+                                            </td>
+                                            <td class="py-3 px-3">
+                                                <span class="text-slate-300 font-semibold" x-text="'CH ' + (char.city_level || 1)"></span>
+                                            </td>
+                                            <td class="py-3 px-3 text-slate-400" x-text="char.last_run_text || 'Never'"></td>
+                                            <td class="py-3 px-3 text-purple-300 font-medium" x-text="char.next_run_text || '-'"></td>
+                                            <td class="py-3 px-3 text-right">
+                                                <div class="flex items-center justify-end gap-1.5">
+                                                    <button @click="runRoutineNow(char)" class="p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition cursor-pointer" title="Run Routine Now">
+                                                        <i class="fa-solid fa-play text-xs"></i>
+                                                    </button>
+                                                    <button @click="dispatchAllianceResource(char)" class="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition cursor-pointer" title="إرسال مسيرة لحقل موارد التحالف (Alliance Resource Pit)">
+                                                        <i class="fa-solid fa-landmark text-xs"></i>
+                                                    </button>
+                                                    <button @click="recallMarches(char)" class="p-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 transition cursor-pointer" title="سحب جميع المسيرات إلى المدينة (Recall Marches)">
+                                                        <i class="fa-solid fa-rotate-left text-xs"></i>
+                                                    </button>
+                                                    <button @click="openTrainModal(char)" class="p-1.5 rounded-lg bg-purple-900/30 hover:bg-purple-800/40 text-purple-300 border border-purple-700/40 transition cursor-pointer" title="Troop Training Settings">
+                                                        <i class="fa-solid fa-person-military-pointing text-xs"></i>
+                                                    </button>
+                                                    <button @click="openGatherModal(char)" class="p-1.5 rounded-lg bg-indigo-900/30 hover:bg-indigo-800/40 text-indigo-300 border border-indigo-700/40 transition cursor-pointer" title="Resource Gathering">
+                                                        <i class="fa-solid fa-wheat-awn text-xs"></i>
+                                                    </button>
+                                                    <button @click="deleteCharacter(char)" class="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition cursor-pointer" title="Remove Governor">
+                                                        <i class="fa-solid fa-trash-can text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- TAB 4: CONFIG -->
+        <div x-show="currentTab === 'config'" x-cloak class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="md:col-span-1 space-y-1">
+                <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-3 shadow-xl">
+                    <nav class="space-y-1">
+                        <button @click="configSubTab = 'general'" :class="configSubTab === 'general' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-sliders text-purple-400"></i> General</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] bg-purple-950/80 text-purple-300 border border-purple-800/40">1</span>
+                        </button>
+                        <button @click="configSubTab = 'gathering'" :class="configSubTab === 'gathering' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-wheat-awn text-amber-400"></i> Gathering</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] bg-purple-950/80 text-purple-300 border border-purple-800/40">4</span>
+                        </button>
+                        <button @click="configSubTab = 'production'" :class="configSubTab === 'production' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-coins text-yellow-400"></i> Production</span>
+                        </button>
+                        <button @click="configSubTab = 'training'" :class="configSubTab === 'training' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-person-military-pointing text-rose-400"></i> Training</span>
+                        </button>
+                        <button @click="configSubTab = 'alliance'" :class="configSubTab === 'alliance' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-hands-holding-child text-indigo-400"></i> Alliance</span>
+                        </button>
+                        <button @click="configSubTab = 'tavern'" :class="configSubTab === 'tavern' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-box-open text-sky-400"></i> Tavern & Chests</span>
+                        </button>
+                        <button @click="configSubTab = 'verification'" :class="configSubTab === 'verification' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-shield-halved text-emerald-400"></i> Verification</span>
+                        </button>
+                        <button @click="configSubTab = 'notifications'" :class="configSubTab === 'notifications' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-bell text-pink-400"></i> Notifications</span>
+                        </button>
+                        <button @click="configSubTab = 'advanced'" :class="configSubTab === 'advanced' ? 'bg-purple-600/30 text-purple-200 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-purple-900/10 border-transparent'" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer">
+                            <span class="flex items-center gap-2.5"><i class="fa-solid fa-gear text-slate-400"></i> Advanced</span>
+                        </button>
+                    </nav>
+                </div>
+            </div>
+
+            <div class="md:col-span-3 space-y-5">
+                <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-400 font-medium">Target:</span>
+                        <select x-model="configTargetAccount" class="bg-[#1c1833] border border-purple-800/50 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-purple-500">
+                            <option value="all">All accounts</option>
+                            <template x-for="acc in accounts" :key="acc.id">
+                                <option :value="acc.id" x-text="acc.email"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-400 font-medium">Apply changes to:</span>
+                        <div class="flex items-center bg-[#1c1833] p-1 rounded-xl border border-purple-800/40">
+                            <button @click="configApplyTarget = 'governor'" :class="configApplyTarget === 'governor' ? 'bg-purple-600/40 text-purple-200 border border-purple-500/40' : 'text-slate-400'" class="px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer">This governor</button>
+                            <button @click="configApplyTarget = 'account'" :class="configApplyTarget === 'account' ? 'bg-purple-600/40 text-purple-200 border border-purple-500/40' : 'text-slate-400'" class="px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer">This account</button>
+                            <button @click="configApplyTarget = 'all'" :class="configApplyTarget === 'all' ? 'bg-purple-600/40 text-purple-200 border border-purple-500/40' : 'text-slate-400'" class="px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer">All accounts</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBTAB 1: GENERAL -->
+                <div x-show="configSubTab === 'general'" x-cloak class="space-y-4">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-purple-400"></i> Run Frequency</h3>
+                            <p class="text-xs text-slate-400 mt-1">Configure how often the bot visits your cities to perform routine tasks.</p>
+                        </div>
+                        <div class="pt-2">
+                            <label class="block text-xs font-semibold text-slate-300 mb-2">Interval</label>
+                            <select x-model="runFrequency" class="w-full md:w-80 bg-[#1c1833] border border-purple-800/50 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500">
+                                <option value="Every 1 hour">Every 1 hour</option>
+                                <option value="Every 2 hours">Every 2 hours</option>
+                                <option value="Every 3 hours">Every 3 hours</option>
+                                <option value="Every 4 hours">Every 4 hours</option>
+                                <option value="Every 6 hours">Every 6 hours</option>
+                                <option value="Every 8 hours">Every 8 hours</option>
+                                <option value="Every 12 hours">Every 12 hours</option>
+                            </select>
+                            <p class="text-[11px] text-slate-500 mt-2 flex items-center gap-1.5"><i class="fa-solid fa-circle-info text-purple-400"></i> Random jitter of ±15-30 minutes is automatically applied to mimic natural human behavior.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-server text-indigo-400"></i> Instance Settings</h3>
+                            <p class="text-xs text-slate-400 mt-1">Configure autonomous execution and reporting parameters.</p>
+                        </div>
+                        <div class="space-y-4 pt-2">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Discord notifications</span>
+                                    <p class="text-[11px] text-slate-500">Receive instant alerts on verification challenges or task anomalies.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" x-model="discordNotifications"><span class="slider"></span></label>
+                            </div>
+                            <div x-show="discordNotifications" x-cloak class="pt-1">
+                                <label class="block text-xs font-semibold text-slate-300 mb-1.5">Discord Webhook URL</label>
+                                <input type="text" x-model="discordWebhook" placeholder="https://discord.com/api/webhooks/..." class="w-full bg-[#1c1833] border border-purple-800/50 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500">
+                            </div>
+                            <div class="flex items-center justify-between pt-2 border-t border-purple-900/20">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Auto-reconnect on disconnect</span>
+                                    <p class="text-[11px] text-slate-500">Automatically re-resolve cloud gateways and re-establish encrypted socket sessions.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" x-model="autoReconnect"><span class="slider"></span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBTAB 2: GATHERING (Exact Full Configuration) -->
+                <div x-show="configSubTab === 'gathering'" x-cloak class="space-y-4">
+                    <!-- Resource Priorities -->
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-wheat-awn text-amber-400"></i> Resource Gathering Priorities</h3>
+                            <p class="text-xs text-slate-400 mt-1">Assign marching march distribution and resource target weights.</p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                            <!-- Food -->
+                            <div class="bg-[#1c1833] border border-purple-800/40 rounded-xl p-3.5 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-amber-300 flex items-center gap-1.5"><i class="fa-solid fa-wheat-awn"></i> Food</span>
+                                    <span class="text-xs font-mono font-bold text-white" x-text="gatherSettings.food + ' marches'"></span>
+                                </div>
+                                <input type="range" min="0" max="5" step="1" x-model="gatherSettings.food" class="w-full accent-amber-400 cursor-pointer">
+                            </div>
+                            <!-- Wood -->
+                            <div class="bg-[#1c1833] border border-purple-800/40 rounded-xl p-3.5 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-emerald-300 flex items-center gap-1.5"><i class="fa-solid fa-tree"></i> Wood</span>
+                                    <span class="text-xs font-mono font-bold text-white" x-text="gatherSettings.wood + ' marches'"></span>
+                                </div>
+                                <input type="range" min="0" max="5" step="1" x-model="gatherSettings.wood" class="w-full accent-emerald-400 cursor-pointer">
+                            </div>
+                            <!-- Stone -->
+                            <div class="bg-[#1c1833] border border-purple-800/40 rounded-xl p-3.5 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-gem"></i> Stone</span>
+                                    <span class="text-xs font-mono font-bold text-white" x-text="gatherSettings.stone + ' marches'"></span>
+                                </div>
+                                <input type="range" min="0" max="5" step="1" x-model="gatherSettings.stone" class="w-full accent-slate-400 cursor-pointer">
+                            </div>
+                            <!-- Gold -->
+                            <div class="bg-[#1c1833] border border-purple-800/40 rounded-xl p-3.5 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-yellow-300 flex items-center gap-1.5"><i class="fa-solid fa-coins"></i> Gold</span>
+                                    <span class="text-xs font-mono font-bold text-white" x-text="gatherSettings.gold + ' marches'"></span>
+                                </div>
+                                <input type="range" min="0" max="5" step="1" x-model="gatherSettings.gold" class="w-full accent-yellow-400 cursor-pointer">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search Filter & Node Levels -->
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-filter text-purple-400"></i> Node Levels & Filter Strategy</h3>
+                            <p class="text-xs text-slate-400 mt-1">Control tile tier restrictions and single-trip collection heuristics.</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1.5">Target Tile Level</label>
+                                <select x-model="gatherSettings.max_node_level" class="w-full bg-[#1c1833] border border-purple-800/50 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500">
+                                    <option value="Level 6 and below">Level 6 and below (Highest first)</option>
+                                    <option value="Level 5 and below">Level 5 and below</option>
+                                    <option value="Level 4 and below">Level 4 and below</option>
+                                    <option value="Level 3 and below">Level 3 and below</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1.5">Territory Preference</label>
+                                <select x-model="gatherSettings.territory" class="w-full bg-[#1c1833] border border-purple-800/50 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500">
+                                    <option value="alliance_preferred">Alliance Territory (25% speed bonus)</option>
+                                    <option value="open_world">Anywhere (Open map scan)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="space-y-3 pt-3 border-t border-purple-900/20">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Only nodes finishable in single trip</span>
+                                    <p class="text-[11px] text-slate-500">Only select nodes whose remaining capacity does not exceed troop load.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" x-model="gatherSettings.only_finishable"><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Skip partially depleted tiles</span>
+                                    <p class="text-[11px] text-slate-500">Avoid tiles already partially mined or abandoned by other players.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" x-model="gatherSettings.skip_partially"><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Auto-recall if node contested</span>
+                                    <p class="text-[11px] text-slate-500">Safely withdraw gatherers immediately if another army marches or attacks the tile.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" x-model="gatherSettings.recall_on_attack"><span class="slider"></span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBTAB 3: PRODUCTION -->
+                <div x-show="configSubTab === 'production'" x-cloak class="space-y-4">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-coins text-yellow-400"></i> City Resource Production</h3>
+                            <p class="text-xs text-slate-400 mt-1">Automatic harvesting routines for interior city buildings.</p>
+                        </div>
+                        <div class="space-y-3 pt-2">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Auto-harvest resource buildings</span>
+                                    <p class="text-[11px] text-slate-500">Automatically collect gold, wood, food, and stone from internal mills.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between pt-2 border-t border-purple-900/20">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Claim daily VIP points & free chest</span>
+                                    <p class="text-[11px] text-slate-500">Collect free daily VIP privileges on every scheduled visit.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBTAB 4: TRAINING -->
+                <div x-show="configSubTab === 'training'" x-cloak class="space-y-4">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl space-y-5">
+                        <div class="flex items-center justify-between pb-3 border-b border-purple-900/20">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                    <i class="fa-solid fa-person-military-pointing text-rose-400"></i> Troop Training Automation
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">Autonomous recruitment and harvest across Barracks, Stables, Archery Range, and Workshop.</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" x-model="trainSettings.enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Capacity & Harvesting Options -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-3.5 rounded-xl bg-[#100e1c] border border-purple-900/30 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="text-xs font-semibold text-slate-200">Auto-collect finished batches</span>
+                                        <p class="text-[11px] text-slate-500">Harvest ready troops from barracks before queuing new units.</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" x-model="trainSettings.auto_collect">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="p-3.5 rounded-xl bg-[#100e1c] border border-purple-900/30 space-y-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs font-semibold text-slate-200">Barracks Training Capacity</span>
+                                    <span class="text-xs font-bold text-purple-400" x-text="trainSettings.train_pct + '% MAX'"></span>
+                                </div>
+                                <input type="range" min="10" max="100" step="5" x-model="trainSettings.train_pct" class="w-full accent-purple-500 cursor-pointer">
+                                <p class="text-[11px] text-slate-500">Percentage of building maximum capacity to recruit per batch.</p>
+                            </div>
+                        </div>
+
+                        <!-- Troop Types & Tiers Configuration -->
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-2">
+                                    <i class="fa-solid fa-layer-group text-purple-400"></i> Military Units & Tiers
+                                </h4>
+                                <span class="text-[11px] text-slate-500">Configure tier (T1 - T5) or set to 'Off' to skip</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <!-- Infantry Card -->
+                                <div class="p-3.5 rounded-xl bg-[#100e1c] border border-purple-900/30 space-y-2.5">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                                                <i class="fa-solid fa-shield text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs font-bold text-slate-200">Infantry</span>
+                                                <p class="text-[10px] text-slate-500">Barracks</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                                              :class="trainSettings.tiers.infantry === 'off' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-blue-900/40 text-blue-300 border border-blue-600/40'"
+                                              x-text="trainSettings.tiers.infantry === 'off' ? 'OFF' : trainSettings.tiers.infantry.toUpperCase()">
+                                        </span>
+                                    </div>
+                                    <select x-model="trainSettings.tiers.infantry" class="w-full bg-[#161327] border border-purple-800/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                                        <option value="off">Off / Disabled (معطل)</option>
+                                        <option value="t1">Tier 1 — Swordsman (T1)</option>
+                                        <option value="t2">Tier 2 — Spearman (T2)</option>
+                                        <option value="t3">Tier 3 — Guard (T3)</option>
+                                        <option value="t4">Tier 4 — Legionary (T4)</option>
+                                        <option value="t5">Tier 5 — Royal Guard (T5)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Cavalry Card -->
+                                <div class="p-3.5 rounded-xl bg-[#100e1c] border border-purple-900/30 space-y-2.5">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                                                <i class="fa-solid fa-horse text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs font-bold text-slate-200">Cavalry</span>
+                                                <p class="text-[10px] text-slate-500">Stable</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                                              :class="trainSettings.tiers.cavalry === 'off' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-amber-900/40 text-amber-300 border border-amber-600/40'"
+                                              x-text="trainSettings.tiers.cavalry === 'off' ? 'OFF' : trainSettings.tiers.cavalry.toUpperCase()">
+                                        </span>
+                                    </div>
+                                    <select x-model="trainSettings.tiers.cavalry" class="w-full bg-[#161327] border border-purple-800/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                                        <option value="off">Off / Disabled (معطل)</option>
+                                        <option value="t1">Tier 1 — Light Cavalry (T1)</option>
+                                        <option value="t2">Tier 2 — Horseman (T2)</option>
+                                        <option value="t3">Tier 3 — Knight (T3)</option>
+                                        <option value="t4">Tier 4 — Lancer (T4)</option>
+                                        <option value="t5">Tier 5 — Royal Knight (T5)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Archery Card -->
+                                <div class="p-3.5 rounded-xl bg-[#100e1c] border border-purple-900/30 space-y-2.5">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                                                <i class="fa-solid fa-bullseye text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs font-bold text-slate-200">Archery</span>
+                                                <p class="text-[10px] text-slate-500">Archery Range</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                                              :class="trainSettings.tiers.archery === 'off' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-emerald-900/40 text-emerald-300 border border-emerald-600/40'"
+                                              x-text="trainSettings.tiers.archery === 'off' ? 'OFF' : trainSettings.tiers.archery.toUpperCase()">
+                                        </span>
+                                    </div>
+                                    <select x-model="trainSettings.tiers.archery" class="w-full bg-[#161327] border border-purple-800/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                                        <option value="off">Off / Disabled (معطل)</option>
+                                        <option value="t1">Tier 1 — Bowman (T1)</option>
+                                        <option value="t2">Tier 2 — Archer (T2)</option>
+                                        <option value="t3">Tier 3 — Composite Bowman (T3)</option>
+                                        <option value="t4">Tier 4 — Crossbowman (T4)</option>
+                                        <option value="t5">Tier 5 — Royal Crossbowman (T5)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Siege Card -->
+                                <div class="p-3.5 rounded-xl bg-[#100e1c] border border-purple-900/30 space-y-2.5">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                                                <i class="fa-solid fa-hammer text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs font-bold text-slate-200">Siege</span>
+                                                <p class="text-[10px] text-slate-500">Workshop</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                                              :class="trainSettings.tiers.siege === 'off' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-purple-900/40 text-purple-300 border border-purple-600/40'"
+                                              x-text="trainSettings.tiers.siege === 'off' ? 'OFF' : trainSettings.tiers.siege.toUpperCase()">
+                                        </span>
+                                    </div>
+                                    <select x-model="trainSettings.tiers.siege" class="w-full bg-[#161327] border border-purple-800/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                                        <option value="off">Off / Disabled (معطل)</option>
+                                        <option value="t1">Tier 1 — Battering Ram (T1)</option>
+                                        <option value="t2">Tier 2 — Ballista (T2)</option>
+                                        <option value="t3">Tier 3 — Catapult (T3)</option>
+                                        <option value="t4">Tier 4 — Trebuchet (T4)</option>
+                                        <option value="t5">Tier 5 — Siege Tower (T5)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBTAB 5: ALLIANCE -->
+                <div x-show="configSubTab === 'alliance'" x-cloak class="space-y-4">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-hands-holding-child text-indigo-400"></i> Alliance Cooperation</h3>
+                            <p class="text-xs text-slate-400 mt-1">Automate member assistance, technology donations, and gift claims.</p>
+                        </div>
+                        <div class="space-y-3 pt-2">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Auto-assist alliance members (Opcode 1004)</span>
+                                    <p class="text-[11px] text-slate-500">Click help button automatically for construction and research requests.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between pt-2 border-t border-purple-900/20">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Auto-donate to recommended alliance tech</span>
+                                    <p class="text-[11px] text-slate-500">Donate available research points to prioritized technologies.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between pt-2 border-t border-purple-900/20">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">Claim all alliance gift chests</span>
+                                    <p class="text-[11px] text-slate-500">Collect common and rare gift chests from alliance purchases and barbarian forts.</p>
+                                </div>
+                                <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between pt-3 border-t border-purple-900/20">
+                                <div>
+                                    <span class="text-xs font-semibold text-slate-200">حقل موارد التحالف (Alliance Resource Pit)</span>
+                                    <p class="text-[11px] text-slate-500">استخراج إحداثيات الحقل تلقائياً وإرسال مسيرة بكامل سعة الجيش (الخيالة والمشاة).</p>
+                                </div>
+                                <button @click="selectedCharacter ? dispatchAllianceResource(selectedCharacter) : showToast('يرجى النقر على أيقونة الحصن 🏰 بجانب الحاكم في الجدول', 'info')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer shadow-lg shadow-amber-600/30">
+                                    <i class="fa-solid fa-landmark"></i>
+                                    <span>إرسال لحقل التحالف</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OTHER SUBTABS (Tavern, Verification, Notifications, Advanced) -->
+                <div x-show="['tavern', 'verification', 'notifications', 'advanced'].includes(configSubTab)" x-cloak class="space-y-4">
+                    <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-6 shadow-xl text-center text-slate-400">
+                        <i class="fa-solid fa-sliders text-2xl text-purple-400 mb-2"></i>
+                        <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider" x-text="configSubTab + ' settings'"></h4>
+                        <p class="text-[11px] text-slate-500 mt-1">Autonomous presets active. Modify custom parameters or save changes below.</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-2">
+                    <button @click="saveConfig()" :disabled="savingConfig" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-2 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer shadow-lg shadow-purple-600/30">
+                        <template x-if="savingConfig"><i class="fa-solid fa-spinner fa-spin"></i></template>
+                        <template x-if="!savingConfig"><i class="fa-solid fa-check"></i></template>
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: INVENTORY -->
+        <div x-show="currentTab === 'inventory'" x-cloak class="space-y-4">
+            <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-8 text-center text-slate-400">
+                <i class="fa-solid fa-boxes-stacked text-3xl text-purple-400 mb-3"></i>
+                <h3 class="text-base font-bold text-slate-200">Fleet Inventory & Resource Ledger</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">Track global resource packs, speedups, and items across all synced accounts and kingdoms.</p>
+            </div>
+        </div>
+
+        <!-- TAB 3: HISTORY -->
+        <div x-show="currentTab === 'history'" x-cloak class="space-y-4">
+            <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-8 text-center text-slate-400">
+                <i class="fa-solid fa-timeline text-3xl text-indigo-400 mb-3"></i>
+                <h3 class="text-base font-bold text-slate-200">Execution History & Audit Trail</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">Historical task logs, gathering yield stats, and troop production reports.</p>
+            </div>
+        </div>
+
+        <!-- TAB 5: UPGRADE -->
+        <div x-show="currentTab === 'upgrade'" x-cloak class="space-y-4">
+            <div class="bg-[#141124] border border-purple-900/30 rounded-2xl p-8 text-center text-slate-400">
+                <i class="fa-solid fa-crown text-3xl text-amber-400 mb-3"></i>
+                <h3 class="text-base font-bold text-slate-200">Subscription & Slot Upgrades</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">Manage high-capacity multi-account licenses and dedicated cloud proxies.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODAL: ADD ACCOUNT -->
+    <div x-show="showConnectModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div class="bg-[#161327] border border-purple-900/50 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-purple-900/30">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2"><i class="fa-solid fa-link text-purple-400"></i> Connect Lilith Account</h3>
+                <button @click="showConnectModal = false" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+            </div>
+            <form @submit.prevent="submitConnectAccount()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Lilith Account Email</label>
+                    <input type="email" x-model="connectEmail" required placeholder="governor@gmail.com" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+                    <input type="password" x-model="connectPassword" required placeholder="????????????" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500">
+                </div>
+                <template x-if="connectError">
+                    <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span x-text="connectError"></span>
+                    </div>
+                </template>
+                <template x-if="needsCaptcha">
+                    <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+                        <i class="fa-solid fa-puzzle-piece"></i>
+                        <span>Captcha verification required! Complete slider in the opened popup window.</span>
+                    </div>
+                </template>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="showConnectModal = false" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white">Cancel</button>
+                    <button type="submit" :disabled="connecting" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer">
+                        <template x-if="connecting"><i class="fa-solid fa-spinner fa-spin"></i></template>
+                        <span>Connect & Sync</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: DYNAMIC TROOP TRAINING -->
+    <div x-show="showTrainModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div class="bg-[#161327] border border-purple-900/50 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-purple-900/30">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-person-military-pointing text-purple-400"></i>
+                    <span>Troop Training - </span>
+                    <span class="text-purple-300" x-text="selectedCharacter?.name"></span>
+                </h3>
+                <button @click="showTrainModal = false" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div class="space-y-3">
+                    <label class="block font-semibold text-slate-300">Unit Categories & Tiers</label>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <!-- Infantry -->
+                        <div class="p-2.5 rounded-lg bg-[#100e1c] border border-purple-800/30 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-200">Infantry</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded" :class="modalTiers.infantry === 'off' ? 'bg-slate-800 text-slate-400' : 'bg-blue-900/40 text-blue-300'" x-text="modalTiers.infantry.toUpperCase()"></span>
+                            </div>
+                            <select x-model="modalTiers.infantry" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-xs text-white">
+                                <option value="off">Off (معطل)</option>
+                                <option value="t1">T1 (Swordsman)</option>
+                                <option value="t2">T2 (Spearman)</option>
+                                <option value="t3">T3 (Guard)</option>
+                                <option value="t4">T4 (Legionary)</option>
+                                <option value="t5">T5 (Royal Guard)</option>
+                            </select>
+                        </div>
+                        <!-- Cavalry -->
+                        <div class="p-2.5 rounded-lg bg-[#100e1c] border border-purple-800/30 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-200">Cavalry</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded" :class="modalTiers.cavalry === 'off' ? 'bg-slate-800 text-slate-400' : 'bg-amber-900/40 text-amber-300'" x-text="modalTiers.cavalry.toUpperCase()"></span>
+                            </div>
+                            <select x-model="modalTiers.cavalry" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-xs text-white">
+                                <option value="off">Off (معطل)</option>
+                                <option value="t1">T1 (Light Cav)</option>
+                                <option value="t2">T2 (Horseman)</option>
+                                <option value="t3">T3 (Knight)</option>
+                                <option value="t4">T4 (Lancer)</option>
+                                <option value="t5">T5 (Royal Knight)</option>
+                            </select>
+                        </div>
+                        <!-- Archery -->
+                        <div class="p-2.5 rounded-lg bg-[#100e1c] border border-purple-800/30 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-200">Archery</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded" :class="modalTiers.archery === 'off' ? 'bg-slate-800 text-slate-400' : 'bg-emerald-900/40 text-emerald-300'" x-text="modalTiers.archery.toUpperCase()"></span>
+                            </div>
+                            <select x-model="modalTiers.archery" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-xs text-white">
+                                <option value="off">Off (معطل)</option>
+                                <option value="t1">T1 (Bowman)</option>
+                                <option value="t2">T2 (Archer)</option>
+                                <option value="t3">T3 (Composite)</option>
+                                <option value="t4">T4 (Crossbowman)</option>
+                                <option value="t5">T5 (Royal Crossbow)</option>
+                            </select>
+                        </div>
+                        <!-- Siege -->
+                        <div class="p-2.5 rounded-lg bg-[#100e1c] border border-purple-800/30 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-200">Siege</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded" :class="modalTiers.siege === 'off' ? 'bg-slate-800 text-slate-400' : 'bg-purple-900/40 text-purple-300'" x-text="modalTiers.siege.toUpperCase()"></span>
+                            </div>
+                            <select x-model="modalTiers.siege" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-xs text-white">
+                                <option value="off">Off (معطل)</option>
+                                <option value="t1">T1 (Battering Ram)</option>
+                                <option value="t2">T2 (Ballista)</option>
+                                <option value="t3">T3 (Catapult)</option>
+                                <option value="t4">T4 (Trebuchet)</option>
+                                <option value="t5">T5 (Siege Tower)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label class="font-semibold text-slate-300">Barracks Capacity</label>
+                        <span class="text-purple-400 font-bold" x-text="trainPct + '%'"></span>
+                    </div>
+                    <input type="range" min="10" max="100" step="5" x-model="trainPct" class="w-full accent-purple-500">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button @click="showTrainModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white">Cancel</button>
+                    <button @click="dispatchTraining()" :disabled="dispatchingTask" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-5 py-2 rounded-xl flex items-center gap-2">
+                        <template x-if="dispatchingTask"><i class="fa-solid fa-spinner fa-spin"></i></template>
+                        <span>Dispatch Training</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: GATHERING DISPATCH -->
+    <div x-show="showGatherModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div class="bg-[#161327] border border-purple-900/50 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-purple-900/30">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-wheat-awn text-amber-400"></i>
+                    <span>Resource Gathering - </span>
+                    <span class="text-purple-300" x-text="selectedCharacter?.name"></span>
+                </h3>
+                <button @click="showGatherModal = false" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-2">Resource Types</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center gap-2 p-2 rounded-lg bg-[#100e1c] border border-purple-800/30 cursor-pointer">
+                            <input type="checkbox" value="food" x-model="gatherTargets" class="accent-purple-500">
+                            <span>Food</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded-lg bg-[#100e1c] border border-purple-800/30 cursor-pointer">
+                            <input type="checkbox" value="wood" x-model="gatherTargets" class="accent-purple-500">
+                            <span>Wood</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded-lg bg-[#100e1c] border border-purple-800/30 cursor-pointer">
+                            <input type="checkbox" value="stone" x-model="gatherTargets" class="accent-purple-500">
+                            <span>Stone</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded-lg bg-[#100e1c] border border-purple-800/30 cursor-pointer">
+                            <input type="checkbox" value="gold" x-model="gatherTargets" class="accent-purple-500">
+                            <span>Gold</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1">Target Node Level</label>
+                    <select x-model="gatherLevel" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-xl px-3 py-2 text-white">
+                        <option value="6">Level 6 and below (Highest first)</option>
+                        <option value="5">Level 5 and below</option>
+                        <option value="4">Level 4 and below</option>
+                        <option value="3">Level 3 and below</option>
+                    </select>
+                </div>
+                <div class="space-y-2 pt-1">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="gatherOnlyFinishable" class="accent-purple-500">
+                        <span class="text-slate-300">Only nodes finishable in single trip</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="gatherSkipPartial" class="accent-purple-500">
+                        <span class="text-slate-300">Skip partially depleted tiles</span>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button @click="showGatherModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white">Cancel</button>
+                    <button @click="dispatchGathering()" :disabled="dispatchingTask" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2 rounded-xl flex items-center gap-2">
+                        <template x-if="dispatchingTask"><i class="fa-solid fa-spinner fa-spin"></i></template>
+                        <span>Dispatch Marches</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: DEDICATED RSS TRANSFER WIZARD -->
+    <div x-show="showRssModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div class="bg-[#130f24] border border-purple-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-purple-900/30">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-purple-600/30">
+                        <i class="fa-solid fa-truck-fast"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">نظام نقل الموارد المتزامن</h3>
+                        <p class="text-[11px] text-purple-300">Concurrent RSS Transfer & Dynamic Trading Post Tax</p>
+                    </div>
+                </div>
+                <button @click="closeRssTransferModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+
+            <!-- Recipient Information -->
+            <div class="space-y-3 bg-[#1a1532] p-4 rounded-xl border border-purple-800/30 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-bullseye text-purple-400"></i> بيانات الحاكم المستلم
+                    </span>
+                    <template x-if="rssSavedRecipients.length > 0">
+                        <select @change="onSelectRssSavedRecipient($event.target)" class="bg-[#100e1c] text-purple-200 border border-purple-700/40 rounded-lg px-2 py-1 text-xs">
+                            <option value="">-- اختيار مستلم محفوظ --</option>
+                            <template x-for="r in rssSavedRecipients" :key="r.role_id">
+                                <option :value="r.role_id" x-text="`${r.name} (#${r.role_id})`"></option>
+                            </template>
+                        </select>
+                    </template>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">اسم الحاكم:</label>
+                        <input type="text" x-model="rssTargetName" placeholder="King Slayer" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-lg px-3 py-1.5 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">معرف الحاكم (Role ID):</label>
+                        <input type="text" x-model="rssTargetRoleId" placeholder="227658377" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-lg px-3 py-1.5 text-white font-mono">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">إحداثي X:</label>
+                        <input type="number" x-model.number="rssTargetX" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-lg px-3 py-1.5 text-white font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">إحداثي Y:</label>
+                        <input type="number" x-model.number="rssTargetY" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-lg px-3 py-1.5 text-white font-mono">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trading Post & Amounts -->
+            <div class="space-y-3 bg-[#1a1532] p-4 rounded-xl border border-purple-800/30 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-store text-cyan-400"></i> إعدادات السوق والضريبة
+                    </span>
+                    <span class="text-amber-400 font-mono font-bold" x-text="`الضريبة: ${(getRssTaxRate() * 100).toFixed(0)}%`"></span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">مستوى مبنى السوق:</label>
+                        <select x-model.number="rssTradingPostLvl" class="w-full bg-[#100e1c] border border-purple-800/40 rounded-lg px-3 py-1.5 text-white">
+                            <template x-for="lvl in 25" :key="lvl">
+                                <option :value="lvl" x-text="`السوق لفل ${lvl}`"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- RSS Quantities Inputs -->
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                    <div class="bg-[#100e1c] p-2.5 rounded-lg border border-purple-900/30 space-y-1">
+                        <span class="text-amber-300 font-bold">🌾 طعام (Food)</span>
+                        <input type="number" step="1000000" x-model.number="rssRequested.food" placeholder="0" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-white font-mono">
+                        <div class="text-[10px] text-slate-400 flex justify-between pt-1">
+                            <span>المسحوب:</span>
+                            <span class="text-emerald-400 font-mono font-bold" x-text="calcGrossNeeded(rssRequested.food).toLocaleString()"></span>
+                        </div>
+                    </div>
+                    <div class="bg-[#100e1c] p-2.5 rounded-lg border border-purple-900/30 space-y-1">
+                        <span class="text-emerald-300 font-bold">🪵 خشب (Wood)</span>
+                        <input type="number" step="1000000" x-model.number="rssRequested.wood" placeholder="0" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-white font-mono">
+                        <div class="text-[10px] text-slate-400 flex justify-between pt-1">
+                            <span>المسحوب:</span>
+                            <span class="text-emerald-400 font-mono font-bold" x-text="calcGrossNeeded(rssRequested.wood).toLocaleString()"></span>
+                        </div>
+                    </div>
+                    <div class="bg-[#100e1c] p-2.5 rounded-lg border border-purple-900/30 space-y-1">
+                        <span class="text-cyan-300 font-bold">🪨 حجر (Stone)</span>
+                        <input type="number" step="1000000" x-model.number="rssRequested.stone" placeholder="0" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-white font-mono">
+                        <div class="text-[10px] text-slate-400 flex justify-between pt-1">
+                            <span>المسحوب:</span>
+                            <span class="text-emerald-400 font-mono font-bold" x-text="calcGrossNeeded(rssRequested.stone).toLocaleString()"></span>
+                        </div>
+                    </div>
+                    <div class="bg-[#100e1c] p-2.5 rounded-lg border border-purple-900/30 space-y-1">
+                        <span class="text-yellow-400 font-bold">🪙 ذهب (Gold)</span>
+                        <input type="number" step="1000000" x-model.number="rssRequested.gold" placeholder="0" class="w-full bg-[#161327] border border-purple-800/40 rounded px-2 py-1 text-white font-mono">
+                        <div class="text-[10px] text-slate-400 flex justify-between pt-1">
+                            <span>المسحوب:</span>
+                            <span class="text-emerald-400 font-mono font-bold" x-text="calcGrossNeeded(rssRequested.gold).toLocaleString()"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal Stream Logs -->
+            <template x-if="rssLogs.length > 0">
+                <div class="bg-[#090810] border border-purple-900/40 rounded-xl p-3 max-h-40 overflow-y-auto font-mono text-[11px] text-purple-200 space-y-1">
+                    <template x-for="(l, i) in rssLogs" :key="i">
+                        <div class="flex items-start gap-1">
+                            <span class="text-cyan-400">&gt;</span>
+                            <span x-text="l"></span>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- Actions -->
+            <div class="flex items-center justify-between pt-2">
+                <button @click="closeRssTransferModal()" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs">إغلاق</button>
+                <div class="flex items-center gap-2">
+                    <template x-if="rssIsTransferring">
+                        <button @click="stopRssTransfer()" class="bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/40 px-4 py-2 rounded-xl text-xs font-bold">
+                            إيقاف النقل
+                        </button>
+                    </template>
+                    <button @click="startRssTransfer()" :disabled="rssIsTransferring" class="bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-bold px-6 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-purple-600/30">
+                        <template x-if="rssIsTransferring"><i class="fa-solid fa-spinner fa-spin"></i></template>
+                        <template x-if="!rssIsTransferring"><i class="fa-solid fa-rocket"></i></template>
+                        <span>إطلاق النقل المتزامن</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Overlay -->
+    <div class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none">
+        <template x-for="t in toasts" :key="t.id">
+            <div class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-xs font-semibold backdrop-blur-md transition-all duration-300 border"
+                 :class="{
+                     'bg-[#1a1436]/90 border-purple-600/50 text-purple-200': t.type === 'info',
+                     'bg-[#0f2e22]/90 border-emerald-500/50 text-emerald-200': t.type === 'success',
+                     'bg-[#381018]/90 border-rose-500/50 text-rose-200': t.type === 'error'
+                 }">
+                <i class="fa-solid" :class="{
+                    'fa-circle-info text-purple-400': t.type === 'info',
+                    'fa-circle-check text-emerald-400': t.type === 'success',
+                    'fa-circle-exclamation text-rose-400': t.type === 'error'
+                }"></i>
+                <span x-text="t.message"></span>
+            </div>
+        </template>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "greeting": null,
+  "seeds": [
+    {
+      "t": "seed_init",
+      "ch": 1,
+      "ecx": "0x1b357407"
+    },
+    {
+      "t": "seed_init",
+      "ch": 2,
+      "ecx": "0x1e2d7979"
+    }
+  ],
+  "conn_obj": "0x1b6bdba27d0",
+  "transforms": [],
+  "write_log_count": 0
+}

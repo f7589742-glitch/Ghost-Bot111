@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoK Bot - بوت ريزم اوف كينجدومز</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f4e 50%, #0d1230 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            margin-top: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 2.2em;
+            background: linear-gradient(90deg, #f0c040, #ff6b35, #f0c040);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: #8892b0;
+            font-size: 1.1em;
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .card h2 {
+            color: #f0c040;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #ccd6f6;
+            font-size: 0.95em;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1em;
+            transition: border 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #f0c040;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #f0c040, #ff6b35);
+            color: #000;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(240,192,64,0.3); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-danger {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: #fff;
+        }
+        .btn-danger:hover { transform: translateY(-2px); }
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .status-item {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+        }
+        .status-item .label { color: #8892b0; font-size: 0.85em; margin-bottom: 4px; }
+        .status-item .value { font-size: 1.3em; font-weight: bold; color: #ccd6f6; }
+        .status-item .value.ok { color: #4caf50; }
+        .status-item .value.warn { color: #f0c040; }
+        .status-item .value.err { color: #ff4444; }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f0c040, #ff6b35);
+            border-radius: 4px;
+            transition: width 0.5s;
+        }
+        .log-box {
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            padding: 16px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            line-height: 1.6;
+            direction: ltr;
+            text-align: left;
+        }
+        .log-entry { margin-bottom: 4px; }
+        .log-entry.info { color: #4caf50; }
+        .log-entry.warn { color: #f0c040; }
+        .log-entry.error { color: #ff4444; }
+        .hidden { display: none; }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #f0c040;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .feature {
+            text-align: center;
+            padding: 16px 8px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .feature .icon { font-size: 2em; margin-bottom: 8px; }
+        .feature .text { font-size: 0.85em; color: #8892b0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚔️ RoK Bot</h1>
+            <p>بوت ريزم اوف كينجدومز — بدون تحميل أي ملف</p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="card" id="loginCard">
+            <h2>🔑 تسجيل الدخول</h2>
+            <div class="form-group">
+                <label>البريد الإلكتروني Lilith</label>
+                <input type="email" id="email" placeholder="example@hotmail.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label>كلمة المرور</label>
+                <input type="password" id="password" placeholder="كلمة المرور" autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label>سيرفر اللعبة</label>
+                <select id="server">
+                    <option value="43.159.112.101:3101">EU2 ( rocgate )</option>
+                    <option value="43.159.113.101:3101">EU1</option>
+                    <option value="34.54.22.150:3101">Asia</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" id="startBtn" onclick="startBot()">
+                🚀 تشغيل البوت
+            </button>
+        </div>
+
+        <!-- Dashboard -->
+        <div class="card hidden" id="dashboardCard">
+            <h2>📊 حالة البوت</h2>
+
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="label">الحالة</div>
+                    <div class="value" id="stStatus">—</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">معرف الحساب</div>
+                    <div class="value" id="stPlayer">—</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">مدة التشغيل</div>
+                    <div class="value" id="stUptime">0s</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">الكيب ألايف</div>
+                    <div class="value" id="stKA">0</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">البيانات المرسلة</div>
+                    <div class="value" id="stTX">0 KB</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">البيانات المستلمة</div>
+                    <div class="value" id="stRX">0 KB</div>
+                </div>
+            </div>
+
+            <div class="progress-bar">
+                <div class="fill" id="progressFill" style="width: 0%"></div>
+            </div>
+
+            <div class="log-box" id="logBox"></div>
+
+            <button class="btn btn-danger" style="margin-top: 16px" onclick="stopBot()">
+                ⏹️ إيقاف البوت
+            </button>
+        </div>
+
+        <!-- Features -->
+        <div class="features">
+            <div class="feature">
+                <div class="icon">🌐</div>
+                <div class="text">يعمل من المتصفح مباشرة</div>
+            </div>
+            <div class="feature">
+                <div class="icon">⚡</div>
+                <div class="text">تثبيت في ثوانٍ</div>
+            </div>
+            <div class="feature">
+                <div class="icon">🔒</div>
+                <div class="text">آمن 100%</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let pollTimer = null;
+
+        function addLog(msg, type = 'info') {
+            const logBox = document.getElementById('logBox');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            const time = new Date().toLocaleTimeString('en-US', {hour12: false});
+            entry.textContent = `[${time}] ${msg}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function formatUptime(seconds) {
+            if (seconds < 60) return seconds + 's';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's';
+            return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        async function startBot() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const server = document.getElementById('server').value;
+
+            if (!email || !password) {
+                alert('أدخل البريد وكلمة المرور');
+                return;
+            }
+
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ جاري التسجيل... <span class="loading-spinner"></span>';
+
+            addLog('جاري تسجيل الدخول...', 'info');
+
+            try {
+                const resp = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email, password, server})
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    addLog('خطأ: ' + data.error, 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '🚀 تشغيل البوت';
+                    return;
+                }
+
+                sessionId = data.session_id;
+                addLog('تم إنشاء الجلسة: ' + sessionId, 'info');
+
+                document.getElementById('loginCard').classList.add('hidden');
+                document.getElementById('dashboardCard').classList.remove('hidden');
+
+                pollStatus();
+
+            } catch (e) {
+                addLog('خطأ في الاتصال: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '🚀 تشغيل البوت';
+            }
+        }
+
+        async function pollStatus() {
+            if (!sessionId) return;
+
+            try {
+                const resp = await fetch('/api/status/' + sessionId);
+                const s = await resp.json();
+
+                // Update status display
+                const statusEl = document.getElementById('stStatus');
+                statusEl.textContent = s.status;
+                statusEl.className = 'value ' + (
+                    s.status === 'connected' ? 'ok' :
+                    s.status === 'error' ? 'err' : 'warn'
+                );
+
+                document.getElementById('stPlayer').textContent = s.player_id || '—';
+                document.getElementById('stUptime').textContent = formatUptime(s.uptime_seconds || 0);
+                document.getElementById('stKA').textContent = s.keepalive_count || 0;
+                document.getElementById('stTX').textContent = formatBytes(s.bytes_tx || 0);
+                document.getElementById('stRX').textContent = formatBytes(s.bytes_rx || 0);
+
+                // Progress bar
+                const progress = Math.min(100, ((s.bytes_rx || 0) / 43000) * 100);
+                document.getElementById('progressFill').style.width = progress + '%';
+
+                // Logs
+                if (s.connected) {
+                    addLog('متصل بالسيرفر! الإطارات: TX=' + s.frames_tx + ' RX=' + s.frames_rx, 'info');
+                }
+                if (s.error) {
+                    addLog('خطأ: ' + s.error, 'error');
+                }
+
+                // Continue polling
+                pollTimer = setTimeout(pollStatus, 3000);
+
+            } catch (e) {
+                addLog('خطأ في جلب الحالة: ' + e.message, 'error');
+                pollTimer = setTimeout(pollStatus, 5000);
+            }
+        }
+
+        async function stopBot() {
+            if (!sessionId) return;
+            try {
+                await fetch('/api/stop/' + sessionId, {method: 'POST'});
+                addLog('تم إيقاف البوت', 'warn');
+                if (pollTimer) clearTimeout(pollTimer);
+                document.getElementById('stStatus').textContent = 'stopped';
+                document.getElementById('stStatus').className = 'value err';
+            } catch (e) {
+                addLog('خطأ في الإيقاف: ' + e.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

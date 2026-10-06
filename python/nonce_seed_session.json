@@ -1,0 +1,20 @@
+[
+  {
+    "type": "log",
+    "data": "recv hook installed"
+  },
+  {
+    "type": "log",
+    "data": "seed_fn hooked"
+  },
+  {
+    "type": "seed",
+    "ch": 1,
+    "seed": 38522622
+  },
+  {
+    "type": "seed",
+    "ch": 2,
+    "seed": 909062640
+  }
+]

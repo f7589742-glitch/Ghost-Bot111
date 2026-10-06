@@ -1,0 +1,2459 @@
+# app/api/routes.py
+"""
+RoK Cloud SaaS REST API Router.
+100% Cloud-Native. Zero emulator/client dependency.
+"""
+import asyncio
+import uuid
+import logging
+import datetime
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Request
+import os
+import json
+from app.api.schemas import (
+    AccountSyncRequest, CaptchaVerifyRequest, FinalizeCaptchaRequest, CharacterTaskRequest, CharacterResponse,
+    AccountResponse, TaskLogResponse, DashboardStatsResponse,
+    CharacterSettingsRequest, CharacterSettingsResponse,
+    GatherDispatchRequest, MarchInfo, GatherStatusResponse,
+    TrainDispatchRequest,
+)
+from app.services.smart_gather_search import parse_level_filter
+from app.models import AccountDAO, CharacterDAO, TaskLogDAO, CharacterSettingsDAO, BotSettingsDAO
+from app.database import get_db_connection
+from app.security import encrypt_password
+from app.services.device_generator import DeviceGenerator
+from app.services.lilith_cloud import LilithCloudService
+from app.services.socket_worker import GameSocketWorker
+from app.services.activity_stream import activity_stream
+from app.services.activity_logger import TenantActivityStream
+from app.services.scheduler import scheduler, get_scheduler, run_sequential_fleet_cycle
+
+# Every endpoint below requires user_id: the tenant's Discord auth id.
+# The Next.js same-origin proxy injects it server-side from the verified
+# Supabase session, so a client can never spoof another tenant's id.
+def _tenant(user_id: str = Query(..., description="Tenant Discord user id")) -> str:
+    return (user_id or "").strip()
+
+logger = logging.getLogger("API_ROUTES")
+router = APIRouter(prefix="/api")
+
+_DEFAULT_GATHER_SEED = {
+    "food": 1, "wood": 1, "stone": 1, "gold": 0, "gem": 0,
+    "max_node_level": "Level 6 and below",
+    "only_finishable": True, "skip_partially": True,
+    "max_marches": "auto", "territory": "alliance_preferred",
+    "avoid_territory": True,
+    "recall_on_attack": True,
+    "node_min_level": 2, "node_max_level": 5,
+    "priority_types": ["food", "wood", "stone"],
+}
+
+def _seed_character_settings(char_id: int, user_id: str) -> None:
+    """Seed automation settings for a freshly synced character.
+
+    Never clobbers existing user configuration: creates a settings row
+    only when missing, and fills the gather block only when empty —
+    from the tenant's website gather config (or defaults). This is what
+    makes every newly added website account immediately runnable by the
+    AutonomousScheduler (which re-reads active accounts every sweep).
+    """
+    try:
+        from app.database import get_db_connection
+        con = get_db_connection()
+        row = con.execute(
+            "SELECT gather_json FROM character_settings WHERE character_id = ?",
+            (char_id,)).fetchone()
+    except Exception:
+        return
+    try:
+        tenant_gather = {}
+        raw = BotSettingsDAO.get("gather_config", user_id=user_id)
+        if raw:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                tenant_gather = parsed
+    except Exception:
+        tenant_gather = {}
+    seed = dict(_DEFAULT_GATHER_SEED)
+    seed.update(tenant_gather or {})
+    try:
+        if not row:
+            CharacterSettingsDAO.upsert(char_id, train_pct=100, gather=seed)
+            return
+        try:
+            existing = json.loads(row["gather_json"] or "{}")
+        except Exception:
+            existing = {}
+        if not existing:
+            CharacterSettingsDAO.upsert(char_id, gather=seed)
+    except Exception:
+        pass
+
+@router.get("/dashboard/stats", response_model=DashboardStatsResponse)
+def get_dashboard_stats(user_id: str = Query(...)):
+    """Retrieve this tenant's fleet summary only."""
+    accounts = AccountDAO.get_all(user_id)
+    characters = CharacterDAO.get_all(user_id=user_id)
+    total_power = sum(c.get("power", 0) for c in characters)
+    
+    logs = TaskLogDAO.get_recent(limit=500, user_id=user_id)
+    completed = sum(1 for l in logs if l.get("status") == "SUCCESS")
+    failed = sum(1 for l in logs if l.get("status") == "FAILED")
+
+    return DashboardStatsResponse(
+        total_accounts=len(accounts),
+        total_characters=len(characters),
+        total_power=total_power,
+        total_tasks_completed=completed,
+        total_tasks_failed=failed
+    )
+
+@router.post("/accounts/sync")
+def sync_account(req: AccountSyncRequest):
+    """
+    Authenticate directly with Lilith Cloud Passport.
+    If captcha challenge (Geetest) is triggered, relays challenge parameters to browser.
+    """
+    email = req.email.strip().lower()
+    password = req.password
+    user_id = (getattr(req, "user_id", "") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Tenant user_id required")
+
+    existing_acc = AccountDAO.get_by_email(email, user_id)
+    device_profile = None
+
+    if existing_acc:
+        device_profile = existing_acc.get("device_profile")
+        if existing_acc.get("app_token"):
+            app_uid = existing_acc.get("app_uid")
+            app_token = existing_acc.get("app_token")
+            udid = existing_acc.get("udid")
+            account_id = existing_acc.get("id")
+            logger.info(f"Using cached token for {email} (UID: {app_uid})")
+
+            # Guard 1: genuine Lilith app_tokens always start with "A-".
+            # A corrupt cached value must never produce a fake "0 characters" success.
+            if app_token and str(app_token).startswith("A-"):
+                req_bot_id = getattr(req, "bot_id", None)
+                if req_bot_id:
+                    try:
+                        from app.database import get_db_connection
+                        con = get_db_connection()
+                        with con:
+                            con.execute("UPDATE accounts SET bot_id = ? WHERE id = ? AND user_id = ?", (req_bot_id, account_id, user_id))
+                    except Exception:
+                        pass
+                # Sync fresh characters from rocdir
+                raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+                if raw_characters:
+                    synced_characters = []
+                    for rc in raw_characters:
+                        c_obj = CharacterDAO.upsert(
+                            account_id=account_id,
+                            role_id=str(rc["role_id"]),
+                            name=rc["name"],
+                            kingdom_id=int(rc["kingdom_id"]),
+                            power=int(rc.get("power", 0)),
+                            city_level=int(rc.get("city_level", 1)),
+                            avatar_url=rc.get("avatar_url", ""),
+                            alliance_tag=rc.get("alliance_tag", ""),
+                            is_active_cloud=False
+                        )
+                        synced_characters.append(c_obj)
+                        _seed_character_settings(int(c_obj["id"]), user_id)
+
+                    return {
+                        "success": True,
+                        "status": "AUTHENTICATED",
+                        "message": f"Successfully synced {len(synced_characters)} characters for {email}",
+                        "account": {
+                            "id": account_id,
+                            "email": email,
+                            "app_uid": app_uid,
+                            "characters_found": len(synced_characters)
+                        },
+                        "characters": synced_characters
+                    }
+                logger.warning(f"Cached token for {email} returned 0 roles (stale/invalid). Falling through to fresh authentication.")
+            else:
+                logger.warning(f"Cached token for {email} has invalid format. Forcing fresh authentication.")
+
+    if not device_profile:
+        device_profile = DeviceGenerator.generate(email)
+    device_profile = DeviceGenerator.ensure_sdk_fields(device_profile, email)
+    if existing_acc:
+        # Persist backfilled SDK identity fields so install_id etc. stay stable.
+        try:
+            AccountDAO.update_device_profile(email, user_id, device_profile)
+        except Exception:
+            pass
+
+    # Like the official client, carry any previous session along with the login.
+    prev_uid = existing_acc.get("app_uid") if existing_acc else None
+    prev_token = existing_acc.get("app_token") if existing_acc else None
+    auth_res = LilithCloudService.authenticate(
+        email, password, device_profile=device_profile,
+        app_uid=prev_uid, app_token=prev_token,
+    )
+
+    # 1. Challenge / Captcha handling
+    if auth_res.get("status") == "REQUIRES_VERIFICATION":
+        return {
+            "success": False,
+            "status": "REQUIRES_VERIFICATION",
+            "captcha_type": auth_res.get("captcha_type", "geetest"),
+            "gt": auth_res.get("gt"),
+            "challenge": auth_res.get("challenge"),
+            "captcha_url": auth_res.get("captcha_url", ""),
+            "email": email
+        }
+
+    # 2. Authentication failure
+    if not auth_res.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=auth_res.get("error", "Lilith Cloud Authentication Failed.")
+        )
+
+    # 3. Successful login
+    app_uid = str(auth_res["app_uid"])
+    app_token = auth_res["app_token"]
+    udid = auth_res["udid"]
+    expires_at = auth_res.get("token_expires_at")
+
+    enc_pw = encrypt_password(password)
+    req_bot_id = getattr(req, "bot_id", None)
+    try:
+        acc_obj = AccountDAO.upsert(
+            email=email,
+            user_id=user_id,
+            encrypted_password=enc_pw,
+            udid=udid,
+            app_uid=app_uid,
+            app_token=app_token,
+            token_expires_at=expires_at,
+            device_profile=device_profile,
+            bot_id=req_bot_id
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    account_id = acc_obj["id"]
+
+    raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+    synced_characters = []
+    for rc in raw_characters:
+        c_obj = CharacterDAO.upsert(
+            account_id=account_id,
+            role_id=str(rc["role_id"]),
+            name=rc["name"],
+            kingdom_id=int(rc["kingdom_id"]),
+            power=int(rc.get("power", 0)),
+            city_level=int(rc.get("city_level", 1)),
+            avatar_url=rc.get("avatar_url", ""),
+            alliance_tag=rc.get("alliance_tag", ""),
+            is_active_cloud=False
+        )
+        synced_characters.append(c_obj)
+        _seed_character_settings(int(c_obj["id"]), user_id)
+
+    return {
+        "success": True,
+        "status": "AUTHENTICATED",
+        "message": f"Successfully authenticated {email} and synced {len(synced_characters)} characters!",
+        "account": {
+            "id": account_id,
+            "email": email,
+            "app_uid": app_uid,
+            "characters_found": len(synced_characters)
+        },
+        "characters": synced_characters
+    }
+
+@router.post("/accounts/verify-captcha")
+def verify_captcha(req: CaptchaVerifyRequest):
+    """
+    Retries login with the captchaId UUID issued by the CaptchaDialog bridge
+    after the user solves the slider at captcha-global.lilithgame.com.
+    """
+    email = req.email.strip().lower()
+    password = req.password
+    user_id = (getattr(req, "user_id", "") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Tenant user_id required")
+
+    existing_acc = AccountDAO.get_by_email(email, user_id)
+    device_profile = existing_acc.get("device_profile") if existing_acc else DeviceGenerator.generate(email)
+    device_profile = DeviceGenerator.ensure_sdk_fields(device_profile, email)
+
+    ver_res = LilithCloudService.verify_captcha(
+        email=email,
+        password=password,
+        captcha_id=req.captcha_id,
+        device_profile=device_profile,
+        app_uid=existing_acc.get("app_uid") if existing_acc else None,
+        app_token=existing_acc.get("app_token") if existing_acc else None,
+    )
+
+    if not ver_res.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=ver_res.get("error", "Captcha validation failed. Please retry.")
+        )
+
+    app_uid = str(ver_res["app_uid"])
+    app_token = ver_res["app_token"]
+    udid = ver_res["udid"]
+    expires_at = ver_res.get("token_expires_at")
+
+    enc_pw = encrypt_password(password)
+    req_bot_id = getattr(req, "bot_id", None)
+    try:
+        acc_obj = AccountDAO.upsert(
+            email=email,
+            user_id=user_id,
+            encrypted_password=enc_pw,
+            udid=udid,
+            app_uid=app_uid,
+            app_token=app_token,
+            token_expires_at=expires_at,
+            device_profile=device_profile,
+            bot_id=req_bot_id
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    account_id = acc_obj["id"]
+
+    raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+    synced_characters = []
+    for rc in raw_characters:
+        c_obj = CharacterDAO.upsert(
+            account_id=account_id,
+            role_id=str(rc["role_id"]),
+            name=rc["name"],
+            kingdom_id=int(rc["kingdom_id"]),
+            power=int(rc.get("power", 0)),
+            city_level=int(rc.get("city_level", 1)),
+            avatar_url=rc.get("avatar_url", ""),
+            alliance_tag=rc.get("alliance_tag", ""),
+            is_active_cloud=False
+        )
+        synced_characters.append(c_obj)
+        _seed_character_settings(int(c_obj["id"]), user_id)
+
+    return {
+        "success": True,
+        "status": "AUTHENTICATED",
+        "message": f"Captcha verified! Synced {len(synced_characters)} characters for {email}",
+        "account": {
+            "id": account_id,
+            "email": email,
+            "app_uid": app_uid,
+            "characters_found": len(synced_characters)
+        },
+        "characters": synced_characters
+    }
+
+@router.post("/accounts/finalize-captcha")
+def finalize_captcha(req: FinalizeCaptchaRequest):
+    """
+    Submits authentic Lilith captcha ticket/token captured from the popup/iframe
+    to complete authentication and fetch all account characters.
+    """
+    email = req.email.strip().lower()
+    password = req.password
+    user_id = (getattr(req, "user_id", "") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Tenant user_id required")
+
+    existing_acc = AccountDAO.get_by_email(email, user_id)
+    device_profile = existing_acc.get("device_profile") if existing_acc else DeviceGenerator.generate(email)
+    device_profile = DeviceGenerator.ensure_sdk_fields(device_profile, email)
+
+    ver_res = LilithCloudService.finalize_captcha(
+        email=email,
+        password=password,
+        ticket=req.ticket,
+        randstr=req.randstr or "",
+        device_profile=device_profile,
+        app_uid=existing_acc.get("app_uid") if existing_acc else None,
+        app_token=existing_acc.get("app_token") if existing_acc else None,
+    )
+
+    if not ver_res.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=ver_res.get("error", "Lilith human verification failed. Please try again.")
+        )
+
+    app_uid = str(ver_res["app_uid"])
+    app_token = ver_res["app_token"]
+    udid = ver_res["udid"]
+    expires_at = ver_res.get("token_expires_at")
+
+    enc_pw = encrypt_password(password)
+    try:
+        acc_obj = AccountDAO.upsert(
+            email=email,
+            user_id=user_id,
+            encrypted_password=enc_pw,
+            udid=udid,
+            app_uid=app_uid,
+            app_token=app_token,
+            token_expires_at=expires_at,
+            device_profile=device_profile
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    account_id = acc_obj["id"]
+
+    raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+    synced_characters = []
+    for rc in raw_characters:
+        c_obj = CharacterDAO.upsert(
+            account_id=account_id,
+            role_id=str(rc["role_id"]),
+            name=rc["name"],
+            kingdom_id=int(rc["kingdom_id"]),
+            power=int(rc.get("power", 0)),
+            city_level=int(rc.get("city_level", 1)),
+            avatar_url=rc.get("avatar_url", ""),
+            alliance_tag=rc.get("alliance_tag", ""),
+            is_active_cloud=False
+        )
+        synced_characters.append(c_obj)
+        _seed_character_settings(int(c_obj["id"]), user_id)
+
+    return {
+        "success": True,
+        "status": "AUTHENTICATED",
+        "message": f"Verification successful! Synced {len(synced_characters)} characters for {email}",
+        "account": {
+            "id": account_id,
+            "email": email,
+            "app_uid": app_uid,
+            "characters_found": len(synced_characters)
+        },
+        "characters": synced_characters
+    }
+
+@router.get("/accounts", response_model=List[AccountResponse])
+def list_accounts(user_id: str = Query(...)):
+    """List this tenant's Lilith accounts only."""
+    accounts = AccountDAO.get_all(user_id)
+    results = []
+    for acc in accounts:
+        chars = CharacterDAO.get_by_account_id(acc["id"])
+        results.append(AccountResponse(
+            id=acc["id"],
+            email=acc["email"],
+            udid=acc["udid"],
+            app_uid=acc.get("app_uid"),
+            character_count=len(chars),
+            created_at=acc.get("created_at")
+        ))
+    return results
+
+@router.get("/characters", response_model=List[CharacterResponse])
+def list_characters(kingdom_id: Optional[int] = Query(None, description="Filter by Kingdom ID"), user_id: str = Query(...)):
+    """List this tenant's synced characters, optionally filtered by Kingdom."""
+    chars = CharacterDAO.get_all(kingdom_id=kingdom_id, user_id=user_id)
+    return [
+        CharacterResponse(
+            role_id=c["role_id"],
+            account_email=c.get("account_email"),
+            account_id=c["account_id"],
+            kingdom_id=c["kingdom_id"],
+            name=c["name"],
+            power=c["power"],
+            city_level=c.get("city_level", 1),
+            avatar_url=c.get("avatar_url"),
+            alliance_tag=c.get("alliance_tag"),
+            last_synced=c.get("last_synced"),
+            is_active_cloud=bool(c.get("is_active_cloud", 0)),
+            status="IDLE"
+        )
+        for c in chars
+    ]
+
+@router.get("/characters/{role_id}", response_model=CharacterResponse)
+def get_character(role_id: str, user_id: str = Query(...)):
+    """Retrieve details for a specific character."""
+    c = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Character not found")
+    acc = AccountDAO.get_by_id(c["account_id"], user_id)
+    return CharacterResponse(
+        role_id=c["role_id"],
+        account_email=acc.get("email") if acc else None,
+        account_id=c["account_id"],
+        kingdom_id=c["kingdom_id"],
+        name=c["name"],
+        power=c["power"],
+        city_level=c.get("city_level", 1),
+        avatar_url=c.get("avatar_url"),
+        alliance_tag=c.get("alliance_tag"),
+        last_synced=c.get("last_synced"),
+        is_active_cloud=bool(c.get("is_active_cloud", 0)),
+        status="IDLE"
+    )
+
+@router.post("/characters/{role_id}/run-task")
+def run_character_task(role_id: str, req: CharacterTaskRequest, bg_tasks: BackgroundTasks, user_id: str = Query(...)):
+    """
+    Dispatch a headless game socket task (sync_full, train, gather, alliance_help)
+    in the background.
+    """
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    TaskLogDAO.create(
+        task_id=task_id,
+        role_id=role_id,
+        task_type=req.task_name,
+        status="RUNNING",
+        details={"params": req.params},
+        character_id=char["id"]
+    )
+
+    bg_tasks.add_task(
+        GameSocketWorker.run_character_task,
+        task_id=task_id,
+        role_id=role_id,
+        task_type=req.task_name,
+        params=req.params,
+        user_id=user_id
+    )
+
+    return {
+        "success": True,
+        "task_id": task_id,
+        "role_id": role_id,
+        "task_name": req.task_name,
+        "status": "RUNNING",
+        "message": f"Task '{req.task_name}' queued for execution via TCP gateway"
+    }
+
+@router.get("/tasks/{task_id}", response_model=TaskLogResponse)
+def get_task_status(task_id: str):
+    """Poll task execution status and live socket terminal logs."""
+    task = TaskLogDAO.get_by_task_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return TaskLogResponse(
+        id=task["id"],
+        task_id=task["task_id"],
+        role_id=task.get("role_id"),
+        character_id=task.get("character_id"),
+        task_type=task["task_type"],
+        status=task["status"],
+        details=task.get("details"),
+        timestamp=task.get("timestamp")
+    )
+
+@router.get("/characters/{role_id}/logs", response_model=List[TaskLogResponse])
+def get_character_logs(role_id: str, limit: int = 10, user_id: str = Query(...)):
+    """Retrieve recent task logs for a specific character."""
+    if not CharacterDAO.owns_character(user_id, role_id):
+        raise HTTPException(status_code=404, detail="Character not found")
+    logs = TaskLogDAO.get_recent(limit=limit, user_id=user_id)
+    char_logs = [l for l in logs if l.get("role_id") == str(role_id)]
+    return [
+        TaskLogResponse(
+            id=l["id"],
+            task_id=l["task_id"],
+            role_id=l.get("role_id"),
+            character_id=l.get("character_id"),
+            task_type=l["task_type"],
+            status=l["status"],
+            details=l.get("details"),
+            timestamp=l.get("timestamp")
+        )
+        for l in char_logs
+    ]
+
+
+@router.get("/characters/{role_id}/settings", response_model=CharacterSettingsResponse)
+def get_character_settings(role_id: str, user_id: str = Query(...)):
+    """Reads automation settings (training %, tiers, gather filters) for a character."""
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    s = CharacterSettingsDAO.get_by_character_id(char["id"])
+    return CharacterSettingsResponse(
+        character_id=char["id"], role_id=str(role_id),
+        train_pct=s.get("train_pct", 100),
+        train_count_custom=s.get("train_count_custom"),
+        tiers=s.get("tiers") or {}, gather=s.get("gather") or {},
+    )
+
+
+@router.put("/characters/{role_id}/settings", response_model=CharacterSettingsResponse)
+def update_character_settings(role_id: str, req: CharacterSettingsRequest, user_id: str = Query(...)):
+    """Saves automation settings for a character (used by train/gather tasks)."""
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    if req.clear_custom_count:
+        s = CharacterSettingsDAO.clear_custom_count(char["id"])
+    else:
+        s = CharacterSettingsDAO.get_by_character_id(char["id"])
+    s = CharacterSettingsDAO.upsert(
+        char["id"], train_pct=req.train_pct,
+        train_count_custom=req.train_count_custom,
+        tiers=req.tiers, gather=req.gather,
+        combat=req.combat, hospital=req.hospital,
+        alliance=req.alliance, daily_claims=req.daily_claims,
+        city=req.city)
+    return CharacterSettingsResponse(
+        character_id=char["id"], role_id=str(role_id),
+        train_pct=s.get("train_pct", 100),
+        train_count_custom=s.get("train_count_custom"),
+        tiers=s.get("tiers") or {}, gather=s.get("gather") or {},
+        combat=s.get("combat") or {}, hospital=s.get("hospital") or {},
+        alliance=s.get("alliance") or {}, daily_claims=s.get("daily_claims") or {},
+        city=s.get("city") or {},
+    )
+
+@router.get("/characters/{role_id}/commanders")
+def get_character_commanders(role_id: str, user_id: str = Query(...)):
+    """Returns the known unlocked commander roster for a character."""
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    s = CharacterSettingsDAO.get_by_character_id(char["id"])
+    return {"success": True, "role_id": str(role_id), "commanders": s.get("commanders") or []}
+
+
+@router.put("/characters/{role_id}/commanders")
+def save_character_commanders(role_id: str, payload: Dict[str, Any], user_id: str = Query(...)):
+    """Saves the unlocked commander roster (discovered in-game) for a character."""
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    cmds = payload.get("commanders") or []
+    s = CharacterSettingsDAO.upsert(char["id"], commanders=[int(x) for x in cmds])
+    return {"success": True, "role_id": str(role_id), "commanders": s.get("commanders") or []}
+
+
+@router.get("/marches", response_model=GatherStatusResponse)
+def get_marches(user_id: str = Query(...)):
+    """Retrieve this tenant's real-time gathering marches status."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    tenant_file = os.path.join(base_dir, "tenants", user_id, "gather_status.json")
+    status_file = tenant_file if os.path.exists(tenant_file) else os.path.join(base_dir, "gather_status.json")
+
+    active_marches_count = 0
+    total_city_troops = 0
+    raw_marches = []
+    last_update = None
+
+    if os.path.exists(status_file):
+        try:
+            with open(status_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                active_marches_count = data.get("active_marches_count", 0)
+                total_city_troops = data.get("total_city_troops", 0)
+                raw_marches = data.get("marches", [])
+                last_update = data.get("last_update")
+        except Exception:
+            pass
+
+    max_queues = 5
+    marches_out = []
+    for i in range(max_queues):
+        if i < len(raw_marches):
+            m = raw_marches[i]
+            marches_out.append(MarchInfo(
+                queue_id=i + 1,
+                cmd_id=m.get("cmd_id"),
+                sec_cmd_id=m.get("sec_cmd_id"),
+                cmd_name=m.get("cmd_name") or f"Commander #{m.get('cmd_id')}",
+                type=m.get("type", "food"),
+                target=m.get("target", "Resource Tile"),
+                troops=int(m.get("troops", 0)),
+                load=int(m.get("load", 0)),
+                node_reserves=int(m.get("node_reserves", 0)),
+                status=m.get("status", "Gathering")
+            ))
+        else:
+            marches_out.append(MarchInfo(
+                queue_id=i + 1,
+                cmd_id=None,
+                cmd_name="Unassigned",
+                type="idle",
+                target="Ready to deploy",
+                troops=0,
+                load=0,
+                node_reserves=0,
+                status="IDLE"
+            ))
+
+    return GatherStatusResponse(
+        active_marches_count=active_marches_count,
+        max_queues=max_queues,
+        total_city_troops=total_city_troops,
+        marches=marches_out,
+        last_update=last_update
+    )
+
+
+@router.post("/gather/dispatch")
+def dispatch_gather_marches(req: GatherDispatchRequest, bg_tasks: BackgroundTasks, user_id: str = Query(...)):
+    """
+    Save gathering preferences and dispatch smart headless gathering march immediately.
+    """
+    char = CharacterDAO.get_by_role_id(req.role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # Save to SQLite database
+    gather_prefs = {
+        "food": req.food,
+        "wood": req.wood,
+        "stone": req.stone,
+        "gold": req.gold,
+        "max_node_level": req.max_node_level,
+        "only_finishable": req.only_finishable,
+        "skip_partially": req.skip_partially,
+        "avoid_territory": req.avoid_territory if req.avoid_territory is not None else True,
+        "alliance_tag": str(req.alliance_tag or char.get("alliance_tag") or "NCRR").strip(),
+        "priority_types": [k for k in ["food", "wood", "stone", "gold"] if getattr(req, k, 0) > 0]
+    }
+    if req.city_x is not None and req.city_y is not None:
+        try:
+            if float(req.city_x) > 0 and float(req.city_y) > 0:
+                gather_prefs["city_x"] = float(req.city_x)
+                gather_prefs["city_y"] = float(req.city_y)
+        except (TypeError, ValueError):
+            pass
+    CharacterSettingsDAO.upsert(char["id"], gather=gather_prefs)
+
+    targets = []
+    for _ in range(req.food): targets.append("food")
+    for _ in range(req.wood): targets.append("wood")
+    for _ in range(req.stone): targets.append("stone")
+    for _ in range(req.gold): targets.append("gold")
+    if not targets:
+        targets = ["food", "wood", "stone"]
+
+    level, level_mode = parse_level_filter(req.max_node_level)
+
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    TaskLogDAO.create(
+        task_id=task_id,
+        role_id=req.role_id,
+        task_type="gather",
+        status="RUNNING",
+        details={"params": req.dict()},
+        character_id=char["id"]
+    )
+
+    bg_tasks.add_task(
+        GameSocketWorker.run_character_task,
+        task_id=task_id,
+        role_id=req.role_id,
+        task_type="gather",
+        params={
+            "targets": targets,
+            "max_node_level": req.max_node_level,
+            "level": level,
+            "level_mode": level_mode,
+            "only_finishable": req.only_finishable,
+            "skip_partially": req.skip_partially,
+            "avoid_territory": req.avoid_territory if req.avoid_territory is not None else True,
+            "alliance_tag": str(req.alliance_tag or char.get("alliance_tag") or "NCRR").strip(),
+            "city_x": gather_prefs.get("city_x"),
+            "city_y": gather_prefs.get("city_y")
+        },
+        user_id=user_id
+    )
+
+    return {
+        "success": True,
+        "task_id": task_id,
+        "role_id": req.role_id,
+        "character_name": char["name"],
+        "targets": targets,
+        "status": "RUNNING",
+        "message": f"Headless Gathering dispatched for {char['name']}"
+    }
+
+
+@router.post("/train/dispatch")
+def dispatch_train(req: TrainDispatchRequest, bg_tasks: BackgroundTasks, user_id: str = Query(...)):
+    """
+    Dispatch Pure Headless Troop Training across enabled barracks.
+    Clamps to building capacity, auto-collects finished queues, and selects exact T1-T5 tiers.
+    """
+    char = CharacterDAO.get_by_role_id(req.role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # Persist train preferences
+    CharacterSettingsDAO.upsert(
+        char["id"],
+        train_pct=req.train_pct,
+        train_count_custom=req.train_count_custom,
+        tiers=req.tiers
+    )
+
+    categories = req.categories or ["infantry", "cavalry", "archery", "siege"]
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    TaskLogDAO.create(
+        task_id=task_id,
+        role_id=req.role_id,
+        task_type="train",
+        status="RUNNING",
+        details={"params": req.dict()},
+        character_id=char["id"]
+    )
+
+    bg_tasks.add_task(
+        GameSocketWorker.run_character_task,
+        task_id=task_id,
+        role_id=req.role_id,
+        task_type="train",
+        params={
+            "categories": categories,
+            "percentage": req.train_pct,
+            "count": req.train_count_custom,
+            "tiers": req.tiers or {},
+            "auto_collect": req.auto_collect
+        },
+        user_id=user_id
+    )
+
+    return {
+        "success": True,
+        "task_id": task_id,
+        "role_id": req.role_id,
+        "character_name": char["name"],
+        "categories": categories,
+        "status": "RUNNING",
+        "message": f"Headless Troop Training dispatched for {char['name']}"
+    }
+
+
+
+@router.post("/characters/{character_id}/gather")
+def gather_character(character_id: str, bg_tasks: BackgroundTasks, user_id: str = Query(...), payload: Dict[str, Any] = None):
+    """On-demand manual trigger: Run gathering for this governor (Config tab bindings)."""
+    char = _resolve_character(character_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    role_id = str(char["role_id"])
+    # Load dynamic settings from CharacterSettingsDAO (web Config)
+    settings = CharacterSettingsDAO.get_by_character_id(char["id"])
+    gather_cfg = settings.get("gather", {}) or {}
+    # If payload provides overrides, merge
+    if payload and isinstance(payload, dict):
+        # Allow direct gather override
+        if "gather" in payload:
+            gather_cfg.update(payload["gather"])
+        for k in ["food","wood","stone","gold","max_node_level","search_radius_km"]:
+            if k in payload:
+                gather_cfg[k] = payload[k]
+    march_targets = _build_targets_from_config(gather_cfg)
+    # Honor max_node_level
+    max_level_str = str(gather_cfg.get("max_node_level", "Level 6 and below"))
+    # Handle numeric levels 1-6
+    try:
+        ml = int(gather_cfg.get("max_node_level", 0))
+        if 1 <= ml <= 6:
+            max_level_str = f"Level {ml} and below"
+    except:
+        pass
+    from app.services.smart_gather_search import parse_level_filter
+    level, level_mode = parse_level_filter(max_level_str)
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    TaskLogDAO.create(task_id=task_id, role_id=role_id, task_type="gather", status="RUNNING", details={"params": {"targets": march_targets, "gather_cfg": gather_cfg}}, character_id=char["id"])
+    bg_tasks.add_task(
+        GameSocketWorker.run_character_task,
+        task_id=task_id,
+        role_id=role_id,
+        task_type="gather",
+        params={
+            "targets": march_targets,
+            "max_node_level": max_level_str,
+            "level": level,
+            "level_mode": level_mode,
+            "only_finishable": bool(gather_cfg.get("only_finishable", gather_cfg.get("skip_partially_depleted", True))),
+            "skip_partially": bool(gather_cfg.get("skip_partially", gather_cfg.get("skip_partially_gathered_nodes", True))),
+            "city_x": gather_cfg.get("city_x"),
+            "city_y": gather_cfg.get("city_y"),
+        },
+        user_id=user_id
+    )
+    return {"success": True, "task_id": task_id, "role_id": role_id, "character_name": char.get("name"), "targets": march_targets, "status": "RUNNING", "message": f"Gathering dispatched for {char.get('name')}"}
+
+@router.post("/characters/{character_id}/train")
+def train_character(character_id: str, bg_tasks: BackgroundTasks, user_id: str = Query(...), payload: Dict[str, Any] = None):
+    """On-demand manual trigger: Run barracks training for this governor."""
+    char = _resolve_character(character_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    role_id = str(char["role_id"])
+    settings = CharacterSettingsDAO.get_by_character_id(char["id"])
+    tiers = settings.get("tiers") or {}
+    train_pct = settings.get("train_pct", 100)
+    train_count_custom = settings.get("train_count_custom")
+    # Allow payload override for training
+    if payload and isinstance(payload, dict):
+        if "tiers" in payload:
+            tiers = payload["tiers"]
+        if "train_pct" in payload or "capacity_mode" in payload:
+            train_pct = payload.get("train_pct", payload.get("capacity_mode", train_pct))
+            if str(train_pct).lower() == "max":
+                train_pct = 100
+        if "train_count_custom" in payload:
+            train_count_custom = payload["train_count_custom"]
+    categories = []
+    for cat in ["infantry","cavalry","archery","siege"]:
+        # Check both tiers dict and training dict
+        tier_val = tiers.get(cat) if isinstance(tiers, dict) else None
+        # If training dict exists, check enabled
+        training_dict = settings.get("training") if isinstance(settings.get("training"), dict) else {}
+        if training_dict and cat in training_dict:
+            if not training_dict.get(cat):
+                continue
+            categories.append(cat)
+        elif tier_val is not None and str(tier_val).lower() not in ("off", "skip", "0", ""):
+            categories.append(cat)
+        elif not tiers:
+            categories.append(cat)
+    if not categories:
+        categories = ["infantry","cavalry","archery","siege"]
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    TaskLogDAO.create(task_id=task_id, role_id=role_id, task_type="train", status="RUNNING", details={"params": {"categories": categories, "tiers": tiers}}, character_id=char["id"])
+    bg_tasks.add_task(
+        GameSocketWorker.run_character_task,
+        task_id=task_id,
+        role_id=role_id,
+        task_type="train",
+        params={
+            "categories": categories,
+            "percentage": train_pct,
+            "count": train_count_custom,
+            "tiers": tiers or {},
+            "auto_collect": True
+        },
+        user_id=user_id
+    )
+    return {"success": True, "task_id": task_id, "role_id": role_id, "character_name": char.get("name"), "categories": categories, "status": "RUNNING", "message": f"Training dispatched for {char.get('name')}"}
+
+
+@router.post("/characters/{character_id}/combat")
+def combat_character(character_id: str, bg_tasks: BackgroundTasks, user_id: str = Query(...), payload: Dict[str, Any] = None):
+    """On-demand manual trigger: Run barbarian combat rounds for this governor."""
+    char = _resolve_character(character_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    role_id = str(char["role_id"])
+    settings = CharacterSettingsDAO.get_by_character_id(char["id"])
+    cset = dict(settings.get("combat", {}) or {})
+    if payload and isinstance(payload, dict):
+        if "combat" in payload and isinstance(payload["combat"], dict):
+            cset.update(payload["combat"])
+        for k in ["highest_barb_level", "skip_barbs_below", "primary_commander", "secondary_commander", "combat_rounds", "dispatch_all_marches"]:
+            if k in payload:
+                cset[k] = payload[k]
+
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    TaskLogDAO.create(task_id=task_id, role_id=role_id, task_type="combat", status="RUNNING", details={"params": cset}, character_id=char["id"])
+    bg_tasks.add_task(
+        GameSocketWorker.run_character_task,
+        task_id=task_id,
+        role_id=role_id,
+        task_type="combat",
+        params=cset,
+        user_id=user_id
+    )
+    return {"success": True, "task_id": task_id, "role_id": role_id, "character_name": char.get("name"), "status": "RUNNING", "message": f"Barbarian combat dispatched for {char.get('name')}"}
+
+
+@router.post("/bots/{bot_id}/cycle")
+def trigger_bot_cycle(bot_id: str, bg_tasks: BackgroundTasks, user_id: str = Query(...), delay: float = Query(7.0, description="Delay between characters 5-10s")):
+    """Sequential fleet cycle: 1-by-1 with 5-10s pacing, rich telemetry, anti-gateway flood."""
+    from app.services.scheduler import run_sequential_fleet_cycle
+    accounts = AccountDAO.get_all(user_id)
+    if not accounts:
+        raise HTTPException(status_code=404, detail="No accounts found for this bot/tenant")
+    all_chars = []
+    for acc in accounts:
+        chars = CharacterDAO.get_by_account_id(acc["id"])
+        for c in chars:
+            if c.get("enabled", 1) == 1:
+                all_chars.append(c)
+    if not all_chars:
+        raise HTTPException(status_code=404, detail="No enabled characters for this bot")
+    # Launch sequential background task (FIFO, 1 at a time)
+    bg_tasks.add_task(run_sequential_fleet_cycle, delay_between=float(delay), user_id=user_id)
+    return {"success": True, "bot_id": bot_id, "mode": "sequential", "delay": float(delay), "count": len(all_chars), "message": f"Sequential fleet cycle started for {len(all_chars)} governors (delay {delay}s)", "triggered": [{"role_id": str(c["role_id"]), "name": c.get("name")} for c in all_chars]}
+
+@router.post("/fleet/start")
+def fleet_start(bg_tasks: BackgroundTasks, user_id: str = Query(...), delay: float = Query(7.0)):
+    """Alias for sequential fleet cycle - used by Start bot button."""
+    from app.services.scheduler import run_sequential_fleet_cycle
+    bg_tasks.add_task(run_sequential_fleet_cycle, delay_between=float(delay), user_id=user_id)
+    return {"success": True, "mode": "sequential", "delay": float(delay), "message": f"Fleet sequential cycle started delay={delay}s"}
+
+
+def _format_relative_time(dt_str: Optional[str], is_future: bool = False) -> str:
+    if not dt_str:
+        return "Never" if not is_future else "-"
+    try:
+        dt = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+        now = datetime.datetime.now()
+        diff = (now - dt).total_seconds() if not is_future else (dt - now).total_seconds()
+        if diff < 0:
+            diff = 0
+        if diff < 60:
+            return f"{int(diff)}s ago" if not is_future else f"in {int(diff)}s"
+        elif diff < 3600:
+            m = int(diff // 60)
+            return f"{m}m ago" if not is_future else f"in {m}m"
+        elif diff < 86400:
+            h = int(diff // 3600)
+            m = int((diff % 3600) // 60)
+            return f"{h}h {m}m ago" if not is_future else f"in {h}h {m}m"
+        else:
+            d = int(diff // 86400)
+            return f"{d}d ago" if not is_future else f"in {d}d"
+    except Exception:
+        return dt_str
+
+
+def _resolve_character(identifier: str, user_id: str):
+    """Resolve character by DB id (int) or role_id (string). Enforces tenant ownership."""
+    # Try DB id first if numeric
+    try:
+        if str(identifier).isdigit():
+            from app.database import get_db_connection
+            con = get_db_connection()
+            row = con.execute("SELECT * FROM characters WHERE id = ?", (int(identifier),)).fetchone()
+            if row:
+                char = dict(row)
+                # Verify tenant owns it
+                if CharacterDAO.owns_character(user_id, char["role_id"]):
+                    return char
+    except Exception:
+        pass
+    # Fallback to role_id lookup (tenant-scoped)
+    return CharacterDAO.get_by_role_id(str(identifier), user_id)
+
+def _build_targets_from_config(gather_cfg: dict):
+    """Build march_targets list from web Config Gathering tab."""
+    targets = []
+    def _cnt(key):
+        # Support both food_marches and food — prefer direct count if present and differs
+        # Check for explicit march count first, but also sync legacy keys
+        v_marches = gather_cfg.get(f"{key}_marches")
+        v_direct = gather_cfg.get(key)
+        # If both are present and differ, prefer the direct food value if it was recently set via PUT
+        # (PUT with food:2 should override food_marches:1). Check if direct is not None.
+        if v_direct is not None:
+            try:
+                # If direct was explicitly set, use it
+                return max(0, int(v_direct))
+            except:
+                pass
+        if v_marches is not None:
+            try:
+                return max(0, int(v_marches))
+            except:
+                pass
+        if v_direct is not None:
+            try:
+                return max(0, int(v_direct))
+            except:
+                pass
+        return 0
+    for res in ["food", "wood", "stone", "gold"]:
+        cnt = _cnt(res)
+        for _ in range(cnt):
+            targets.append(res)
+    if not targets:
+        pri = gather_cfg.get("priority_types")
+        if isinstance(pri, list) and pri:
+            targets = [p for p in pri if p in ["food","wood","stone","gold"]][:4]
+    # Also handle gem if ever enabled (should be banned, but keep)
+    if not targets:
+        # Check for enabled gem (should be 0)
+        if gather_cfg.get("gem",0):
+            for _ in range(int(gather_cfg.get("gem",0))):
+                targets.append("gold")  # fallback gold
+    if not targets:
+        targets = ["food","wood","stone"]
+    return targets
+
+
+@router.get("/fleet/grouped")
+def get_fleet_grouped(user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    norm_bot_id = _normalize_bot_id(bot_id)
+    accounts = AccountDAO.get_all(user_id=user_id, bot_id=norm_bot_id)
+    """Returns this tenant's accounts grouped with their nested characters, status, and formatted run times."""
+    
+    result = []
+    for acc in accounts:
+        chars = CharacterDAO.get_by_account_id(acc["id"])
+        formatted_chars = []
+        for c in chars:
+            c_dict = dict(c)
+            c_dict["last_run_text"] = _format_relative_time(c.get("last_run"), is_future=False)
+            c_dict["next_run_text"] = _format_relative_time(c.get("next_run"), is_future=True)
+            formatted_chars.append(c_dict)
+
+        acc_dict = dict(acc)
+        acc_dict["last_run_text"] = _format_relative_time(acc.get("last_run"), is_future=False)
+        acc_dict["characters"] = formatted_chars
+        result.append(acc_dict)
+    return {"accounts": result}
+
+
+@router.post("/accounts/{account_id}/toggle")
+def toggle_account(account_id: int, user_id: str = Query(...)):
+    """Toggle account active state."""
+    acc = AccountDAO.get_by_id(account_id, user_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    current = acc.get("is_active", 1)
+    new_state = 0 if current == 1 else 1
+    AccountDAO.set_active(account_id, user_id, new_state)
+    return {"success": True, "account_id": account_id, "is_active": new_state}
+
+
+@router.post("/characters/{role_id}/toggle")
+def toggle_character(role_id: str, user_id: str = Query(...)):
+    """Toggle character enabled state (legacy blind flip — kept for compat)."""
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    current = char.get("enabled", 1)
+    new_state = 0 if current == 1 else 1
+    CharacterDAO.set_enabled(role_id, new_state)
+    return {"success": True, "role_id": role_id, "enabled": new_state}
+
+
+@router.post("/characters/{role_id}/enabled")
+def set_character_enabled(role_id: str, payload: Dict[str, Any], user_id: str = Query(...)):
+    """Idempotent enable/disable. Body: {"enabled": bool}. Repeated calls are safe —
+    clicking 'off' twice stays off (fixes blind-flip desync)."""
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    new_state = 1 if bool((payload or {}).get("enabled", True)) else 0
+    CharacterDAO.set_enabled(role_id, bool(new_state))
+    return {"success": True, "role_id": role_id, "enabled": new_state}
+
+
+@router.delete("/accounts/{account_id}")
+def delete_account(
+    account_id: str,
+    request: Request,
+    user_id: Optional[str] = Query(None),
+    email: Optional[str] = Query(None)
+):
+    """Permanently remove an account and all its associated characters and settings.
+    Accepts integer ID OR email address as account_id, with optional query user_id/email."""
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = req_uid if req_uid else None
+    target = str(email or account_id).strip()
+    
+    deleted = AccountDAO.delete(target, uid)
+    if not deleted and uid:
+        # Failsafe fallback across tenants if ID was orphaned or tenant switched
+        deleted = AccountDAO.delete(target, None)
+    
+    if not deleted and account_id and account_id != target:
+        deleted = AccountDAO.delete(account_id, uid) or AccountDAO.delete(account_id, None)
+
+    if not deleted:
+        # If not found, return 200 with already deleted state so UI doesn't crash on stale client references
+        return {"success": True, "message": f"Account {target} already removed", "account_id": target, "already_deleted": True}
+
+    return {"success": True, "message": f"Account {target} deleted successfully", "account_id": target}
+
+
+@router.post("/accounts/delete")
+@router.delete("/accounts")
+def delete_account_generic(
+    request: Request,
+    payload: Optional[Dict[str, Any]] = None,
+    email: Optional[str] = Query(None),
+    account_id: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None)
+):
+    """Generic account deletion accepting JSON payload or query parameters."""
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = req_uid if req_uid else None
+    
+    target_email = (payload or {}).get("email") or email
+    target_id = (payload or {}).get("account_id") or (payload or {}).get("id") or account_id
+    target = str(target_email or target_id or "").strip()
+    
+    if not target:
+        raise HTTPException(status_code=400, detail="email or account_id required")
+    
+    deleted = AccountDAO.delete(target, uid)
+    if not deleted and uid:
+        deleted = AccountDAO.delete(target, None)
+    if not deleted and target_id and str(target_id) != target:
+        deleted = AccountDAO.delete(target_id, uid) or AccountDAO.delete(target_id, None)
+    
+    return {"success": True, "message": f"Account {target} deleted successfully", "target": target}
+
+
+@router.delete("/characters/{role_id}")
+def delete_character(role_id: str, user_id: str = Query(...)):
+    """Permanently remove a single character."""
+    char = CharacterDAO.get_by_role_id(role_id, user_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    CharacterDAO.delete(role_id, user_id)
+    return {"success": True, "message": f"Character {char['name']} deleted successfully", "role_id": role_id}
+
+
+@router.post("/accounts/prune-characters")
+def prune_account_characters(payload: Dict[str, Any], user_id: Optional[str] = Query(None)):
+    """Keep ONLY the given role_ids on an account; delete every other character
+    (+ its settings). Used by the Add-dialog picker so deselected characters
+    never reach the scheduler. Body: {"email"|"account_id", "keep_role_ids": [...]}.
+    """
+    uid = (user_id or (payload or {}).get("user_id") or "").strip()
+    keep = {str(r) for r in ((payload or {}).get("keep_role_ids") or [])}
+    acc = None
+    if (payload or {}).get("account_id") is not None:
+        try:
+            acc = AccountDAO.get_by_id(int(payload["account_id"]), uid if uid else None)
+        except Exception:
+            acc = None
+    if acc is None and (payload or {}).get("email"):
+        em = str(payload["email"]).strip().lower()
+        acc = AccountDAO.get_by_email(em, uid if uid else None)
+        if not acc:
+            con = get_db_connection()
+            row = con.execute("SELECT * FROM accounts WHERE LOWER(email) = ?", (em,)).fetchone()
+            acc = dict(row) if row else None
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    removed = []
+    for c in CharacterDAO.get_by_account_id(acc["id"]):
+        if str(c.get("role_id")) not in keep:
+            CharacterDAO.delete(str(c["role_id"]), acc.get("user_id") or uid or None)
+            removed.append(str(c["role_id"]))
+    return {"success": True, "account_id": acc["id"], "kept": sorted(keep), "removed": removed}
+
+
+@router.post("/accounts/by-email/active")
+def set_account_active_by_email(payload: Dict[str, Any], user_id: Optional[str] = Query(None)):
+    """Set account active status by email and sync characters enabled state."""
+    uid = (user_id or (payload or {}).get("user_id") or "").strip()
+    email = str((payload or {}).get("email", "")).strip().lower()
+    is_active = 1 if bool((payload or {}).get("is_active", True)) else 0
+    if not email:
+        raise HTTPException(status_code=400, detail="email required")
+    acc = AccountDAO.get_by_email(email, uid if uid else None)
+    if not acc:
+        con = get_db_connection()
+        row = con.execute("SELECT * FROM accounts WHERE LOWER(email) = ?", (email,)).fetchone()
+        acc = dict(row) if row else None
+    if not acc:
+        raise HTTPException(status_code=404, detail=f"Account {email} not found")
+    AccountDAO.set_active(acc["id"], acc.get("user_id") or uid, is_active)
+    con = get_db_connection()
+    with con:
+        con.execute("UPDATE characters SET enabled = ? WHERE account_id = ?", (is_active, acc["id"]))
+    return {"success": True, "account_id": acc["id"], "email": email, "is_active": is_active}
+
+
+@router.post("/characters/{role_id}/cycle")
+async def run_single_character_cycle(role_id: str, bg_tasks: BackgroundTasks, user_id: Optional[str] = Query(None)):
+    """Run full character cycle (training, alliance donation, gathering) for a single governor."""
+    uid = (user_id or "").strip()
+    char = CharacterDAO.get_by_role_id(str(role_id), uid if uid else None)
+    if not char:
+        char = CharacterDAO.get_by_role_id(str(role_id))
+    if not char:
+        raise HTTPException(status_code=404, detail=f"Character {role_id} not found")
+    acc = AccountDAO.get_by_id(char["account_id"], uid if uid else None)
+    if not acc:
+        acc = AccountDAO.get_by_id(char["account_id"])
+    if not acc:
+        raise HTTPException(status_code=404, detail="Parent account not found")
+
+    bid = acc.get("bot_id") or ""
+    sched = get_scheduler(user_id=acc.get("user_id") or uid, bot_id=bid) if (acc.get("user_id") or uid) else AutonomousScheduler(bot_id=bid)
+    bg_tasks.add_task(sched._run_character_cycle, acc, char, False, True)
+    return {"success": True, "role_id": role_id, "name": char.get("name"), "message": f"Cycle started for {char.get('name')}"}
+
+
+@router.get("/bot/status")
+async def get_bot_status(user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    """Get this tenant's scheduler running state and settings."""
+    target_bot_id = _normalize_bot_id(bot_id)
+    uid = _resolve_tenant_uid(user_id, target_bot_id)
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    return {
+        "running": sched.is_running(),
+        "bot_id": target_bot_id,
+        "settings": BotSettingsDAO.get_all(uid)
+    }
+
+
+@router.post("/bot/start")
+async def start_bot(request: Request, user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    target_bot_id = _normalize_bot_id(bot_id)
+    uid = _resolve_tenant_uid(req_uid, target_bot_id, request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Tenant authentication required")
+
+    BotSettingsDAO.set(f"bot_running_{target_bot_id}", "true", user_id=uid)
+    BotSettingsDAO.set("bot_running", "true", user_id=target_bot_id)
+    BotSettingsDAO.set("bot_running", "true", user_id=uid)
+
+    try:
+        from app.database import get_db_connection
+        con = get_db_connection()
+        with con:
+            con.execute("UPDATE accounts SET is_active = 0 WHERE LOWER(email) LIKE '%shoob%'")
+            con.execute(
+                "UPDATE accounts SET is_active = 1, bot_id = ?, next_run = NULL WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%'",
+                (target_bot_id, uid)
+            )
+            con.execute(
+                "UPDATE characters SET enabled = 1, next_run = NULL WHERE account_id IN (SELECT id FROM accounts WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%') AND LOWER(name) NOT LIKE '%shoob%'",
+                (uid,)
+            )
+    except Exception as e_nr:
+        logger.warning(f"Reset next_run error: {e_nr}")
+
+    from app.services.scheduler import start_master_scheduler, force_reset_execution_locks
+    force_reset_execution_locks()
+    start_master_scheduler()
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    sched.reset_cooldowns()
+    sched.start()
+    if sched._wake_event:
+        sched._wake_event.set()
+    TenantActivityStream.emit(target_bot_id, None, f"⚡ Unit {target_bot_id} START triggered — running two-stage sweep (Slot 1 Primary -> Slot 2 Secondary)...", user_id=uid)
+    await activity_stream.broadcast(f"⚡ Unit {target_bot_id} START triggered — running two-stage sweep...", user_id=uid)
+    return {"status": "ok", "success": True, "running": True, "bot_id": target_bot_id}
+
+
+@router.post("/bot/stop")
+async def stop_bot(request: Request, user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    target_bot_id = _normalize_bot_id(bot_id)
+    uid = _resolve_tenant_uid(req_uid, target_bot_id, request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Tenant authentication required")
+    BotSettingsDAO.set(f"bot_running_{target_bot_id}", "false", user_id=uid)
+    BotSettingsDAO.set("bot_running", "false", user_id=target_bot_id)
+    BotSettingsDAO.set(f"bot_running_{target_bot_id}", "false")
+    BotSettingsDAO.set("bot_running", "false", user_id=uid)
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    sched.stop()
+    return {"success": True, "running": False, "bot_id": target_bot_id}
+
+
+@router.post("/bot/toggle")
+async def toggle_bot(request: Request, user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    target_bot_id = _normalize_bot_id(bot_id)
+    uid = _resolve_tenant_uid(req_uid, target_bot_id, request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Tenant authentication required")
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    if sched.is_running():
+        sched.stop()
+        BotSettingsDAO.set(f"bot_running_{target_bot_id}", "false", user_id=uid)
+        BotSettingsDAO.set("bot_running", "false", user_id=target_bot_id)
+        BotSettingsDAO.set(f"bot_running_{target_bot_id}", "false")
+        BotSettingsDAO.set("bot_running", "false", user_id=uid)
+        return {"success": True, "running": False, "bot_id": target_bot_id}
+    else:
+        sched.reset_cooldowns()
+        sched.start()
+        BotSettingsDAO.set(f"bot_running_{target_bot_id}", "true", user_id=uid)
+        BotSettingsDAO.set("bot_running", "true", user_id=target_bot_id)
+        BotSettingsDAO.set("bot_running", "true", user_id=uid)
+        return {"success": True, "running": True, "bot_id": target_bot_id}
+
+
+@router.post("/bot/run-now")
+async def run_bot_now(request: Request, user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    """Trigger an immediate autonomous pass/cycle across all accounts right now."""
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    target_bot_id = _normalize_bot_id(bot_id)
+    uid = _resolve_tenant_uid(req_uid, target_bot_id, request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Tenant authentication required")
+    try:
+        from app.database import get_db_connection
+        con = get_db_connection()
+        with con:
+            con.execute("UPDATE accounts SET is_active = 0 WHERE LOWER(email) LIKE '%shoob%'")
+            con.execute(
+                "UPDATE accounts SET is_active = 1, bot_id = ?, next_run = NULL WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%'",
+                (target_bot_id, uid)
+            )
+            con.execute(
+                "UPDATE characters SET enabled = 1, next_run = NULL WHERE account_id IN (SELECT id FROM accounts WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%') AND LOWER(name) NOT LIKE '%shoob%'",
+                (uid,)
+            )
+    except Exception as e_nr:
+        pass
+    from app.services.scheduler import force_reset_execution_locks, start_master_scheduler
+    force_reset_execution_locks()
+    start_master_scheduler()
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    sched.reset_cooldowns()
+    sched.start()
+    if sched._wake_event:
+        sched._wake_event.set()
+    TenantActivityStream.emit(target_bot_id, None, f"⚡ Immediate two-stage pass triggered for {target_bot_id} (Slot 1 Primary -> Slot 2 Secondary)...", user_id=uid)
+    await activity_stream.broadcast(f"⚡ Immediate staged run pass triggered by user for {target_bot_id}.", user_id=uid)
+    return {"success": True, "running": True, "bot_id": target_bot_id, "message": "Immediate staged pass triggered successfully"}
+
+
+def _normalize_bot_id(bot_id: Optional[str] = None) -> str:
+    bid = str(bot_id or "").strip()
+    if not bid:
+        return "bot-1"
+    if bid.isdigit():
+        return f"bot-{bid}"
+    return bid
+
+def _resolve_tenant_uid(user_id: Optional[str] = None, bot_id: Optional[str] = None, request: Optional[Request] = None) -> str:
+    uid = (user_id or "").strip()
+    if request:
+        auth_header = request.headers.get("authorization", "").strip()
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+            try:
+                from app.core.auth import decode_supabase_jwt
+                claims = decode_supabase_jwt(token)
+                sub = claims.get("sub") or claims.get("user_id")
+                if sub:
+                    return str(sub).strip()
+            except Exception:
+                pass
+        if not uid or uid in ("dev-operator", "undefined", "null"):
+            uid = request.headers.get("x-user-id", "").strip() or request.query_params.get("user_id", "").strip()
+    if not uid or uid in ("dev-operator", "undefined", "null"):
+        return ""
+    return uid
+
+
+
+
+@router.post("/bot/{bot_id}/start")
+async def start_bot_unit(bot_id: str, request: Request, user_id: Optional[str] = Query(None)):
+    target_bot_id = _normalize_bot_id(bot_id)
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, target_bot_id, request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Tenant authentication required")
+    
+    # Activate and dynamically bind accounts to this user and bot_id (never touch shoob accounts)
+    try:
+        from app.database import get_db_connection
+        con = get_db_connection()
+        with con:
+            con.execute("UPDATE accounts SET is_active = 0 WHERE LOWER(email) LIKE '%shoob%'")
+            # Check if this uid already owns matching accounts
+            uid_count = con.execute("SELECT count(*) FROM accounts WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%'", (uid,)).fetchone()
+            if not uid_count or uid_count[0] == 0:
+                # Fallback: check if accounts exist with target_bot_id
+                bids = [target_bot_id]
+                if target_bot_id.startswith("bot-"): bids.append(target_bot_id[4:])
+                else: bids.append(f"bot-{target_bot_id}")
+                placeholders = ",".join("?" for _ in bids)
+                bot_count = con.execute(f"SELECT count(*) FROM accounts WHERE bot_id IN ({placeholders}) AND LOWER(email) NOT LIKE '%shoob%'", tuple(bids)).fetchone()
+                if bot_count and bot_count[0] > 0:
+                    con.execute(f"UPDATE accounts SET user_id = ?, bot_id = ?, is_active = 1 WHERE bot_id IN ({placeholders}) AND LOWER(email) NOT LIKE '%shoob%'", (uid, target_bot_id, *bids))
+                else:
+                    raise HTTPException(status_code=400, detail="No accounts linked to this unit. Please link an account first.")
+            else:
+                con.execute(
+                    "UPDATE accounts SET is_active = 1, bot_id = ?, next_run = NULL WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%'",
+                    (target_bot_id, uid)
+                )
+
+            con.execute(
+                "UPDATE characters SET enabled = 1, next_run = NULL WHERE account_id IN (SELECT id FROM accounts WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%') AND LOWER(name) NOT LIKE '%shoob%'",
+                (uid,)
+            )
+    except Exception as e_assign:
+        logger.warning(f"Error activating accounts for {target_bot_id}: {e_assign}")
+
+    BotSettingsDAO.set(f"bot_running_{target_bot_id}", "true", user_id=uid)
+    BotSettingsDAO.set("bot_running", "true", user_id=target_bot_id)
+    BotSettingsDAO.set("bot_running", "true", user_id=uid)
+
+    from app.services.scheduler import start_master_scheduler, force_reset_execution_locks
+    force_reset_execution_locks()
+    start_master_scheduler()
+
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    sched.reset_cooldowns()
+    sched._ensure_accounts_bound()
+    sched.start()
+    if sched._wake_event:
+        sched._wake_event.set()
+
+    lang = BotSettingsDAO.get("ui_language", "ar", user_id=uid).lower()
+    is_ar = "ar" in lang or not ("en" in lang)
+    start_msg = (
+        f"⚡ بدء تشغيل دورة الفحص المرحلية للوحدة {target_bot_id} (المرحلة 1: الحكام الأساسيون -> المرحلة 2: الحكام الثانويون)..."
+        if is_ar
+        else f"⚡ Starting autonomous staged sweep for {target_bot_id} (Slot 1 Primary -> Slot 2 Secondary)..."
+    )
+    TenantActivityStream.emit(target_bot_id, None, start_msg, user_id=uid)
+    await activity_stream.broadcast(start_msg, user_id=uid)
+
+    return {"status": "ok", "success": True, "running": True, "bot_id": target_bot_id}
+
+
+@router.post("/bot/{bot_id}/stop")
+async def stop_bot_unit(bot_id: str, request: Request, user_id: Optional[str] = Query(None)):
+    target_bot_id = _normalize_bot_id(bot_id)
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, target_bot_id, request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Tenant authentication required")
+    BotSettingsDAO.set(f"bot_running_{target_bot_id}", "false", user_id=uid)
+    BotSettingsDAO.set("bot_running", "false", user_id=target_bot_id)
+    BotSettingsDAO.set(f"bot_running_{target_bot_id}", "false")
+    BotSettingsDAO.set("bot_running", "false", user_id=uid)
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    sched.stop()
+    return {"status": "ok", "success": True, "running": False, "bot_id": target_bot_id}
+
+
+@router.get("/bot/{bot_id}/unit-status")
+async def bot_unit_status(bot_id: str, request: Request, user_id: Optional[str] = Query(None)):
+    target_bot_id = _normalize_bot_id(bot_id)
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, target_bot_id, request)
+    if not uid:
+        return {"running": False, "status": "stopped", "bot_id": target_bot_id, "settings": {}}
+
+    sched = get_scheduler(user_id=uid, bot_id=target_bot_id)
+    real_uid = getattr(sched, "_user_id", "") or uid
+    
+    from app.services.scheduler import start_master_scheduler
+    start_master_scheduler()
+    
+    is_run = sched.is_running() or BotSettingsDAO.is_bot_running(target_bot_id, real_uid)
+    if is_run and not sched._running:
+        sched._running = True
+        try:
+            loop = asyncio.get_running_loop()
+            if not sched._task or sched._task.done():
+                sched._task = loop.create_task(sched._run_loop())
+        except RuntimeError:
+            pass
+
+    return {
+        "running": is_run,
+        "status": "running" if is_run else "stopped",
+        "bot_id": target_bot_id,
+        "settings": BotSettingsDAO.get_all(real_uid)
+    }
+
+
+
+# ------------------------------------------------------------------
+# INVENTORY + HISTORY (SaaS telemetry, strictly partitioned by bot_id)
+# ------------------------------------------------------------------
+
+@router.get("/bot/{bot_id}/fleet")
+def bot_fleet(bot_id: str, request: Request, user_id: Optional[str] = Query(None)):
+    """Authoritative accounts & characters hierarchy for ONE bot unit.
+    Returns every linked account and its full character list
+    with real names, kingdom, city_level, power, avatar_url, and relative run times.
+    """
+    bid = bot_id.strip()
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, bid, request)
+    if not uid:
+        return {"bot_id": bid, "accounts": []}
+    accounts = AccountDAO.get_all(user_id=uid, bot_id=bid)
+    out_accounts = []
+    for acc in accounts:
+        chars = CharacterDAO.get_by_account_id(acc["id"])
+        chars_list = []
+        for c in chars:
+            c_dict = dict(c)
+            chars_list.append({
+                "role_id": str(c_dict.get("role_id") or ""),
+                "name": c_dict.get("name") or str(c_dict.get("role_id") or ""),
+                "kingdom_id": int(c_dict.get("kingdom_id") or 0),
+                "city_level": int(c_dict.get("city_level") or c_dict.get("city_hall") or 0),
+                "power": int(c_dict.get("power") or 0),
+                "avatar_url": c_dict.get("avatar_url") or "",
+                "enabled": bool(c_dict.get("enabled", 1)),
+                "last_run": c_dict.get("last_run"),
+                "next_run": c_dict.get("next_run"),
+                "last_run_text": _format_relative_time(c_dict.get("last_run"), is_future=False),
+                "next_run_text": _format_relative_time(c_dict.get("next_run"), is_future=True),
+            })
+        acc_dict = dict(acc)
+        out_accounts.append({
+            "email": acc_dict.get("email") or "",
+            "account_id": acc_dict.get("id"),
+            "enabled": bool(acc_dict.get("is_active", 1)),
+            "last_run_text": _format_relative_time(acc_dict.get("last_run"), is_future=False),
+            "characters": chars_list,
+        })
+    return {
+        "bot_id": bid,
+        "accounts": out_accounts,
+    }
+
+
+@router.get("/bot/{bot_id}/inventory")
+def bot_inventory(bot_id: str, request: Request, group_by: Optional[str] = Query(None), user_id: Optional[str] = Query(None)):
+    """Real-time inventory for ONE bot unit.
+
+    Returns gathered sums (today / 7d / 30d with per-day trend), the live
+    in-cities-now totals, and the per-character breakdown. Every query is
+    filtered by bot_id / user_id — zero cross-unit leakage.
+    """
+    from app.models import InventoryDAO, RunHistoryDAO
+    bid = bot_id.strip()
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, bid, request)
+    if not uid:
+        return {
+            "bot_id": bid,
+            "resources_gathered": {},
+            "in_cities_now": {"food": 0, "wood": 0, "stone": 0, "gold": 0, "gems": 0},
+            "characters": [],
+            "characters_by_kingdom": None,
+        }
+
+    characters = InventoryDAO.list_for_bot(bid, user_id=uid)
+    in_cities = {
+        "food": sum(int(c.get("food") or 0) for c in characters),
+        "wood": sum(int(c.get("wood") or 0) for c in characters),
+        "stone": sum(int(c.get("stone") or 0) for c in characters),
+        "gold": sum(int(c.get("gold") or 0) for c in characters),
+        "gems": sum(int(c.get("gems") or 0) for c in characters),
+    }
+
+    windows = {}
+    for label, days in (("today", 1), ("7days", 7), ("30days", 30)):
+        agg = RunHistoryDAO.aggregated_gathered(bid, days, user_id=uid)
+        windows[label] = {**agg, "trend": RunHistoryDAO.daily_trend(bid, days, user_id=uid)}
+
+    chars_out = [
+        {
+            "governor_id": str(c.get("role_id") or ""),
+            "name": c.get("name") or "",
+            "kingdom": int(c.get("kingdom_id") or 0),
+            "city_hall": int(c.get("city_hall_level") or 0),
+            "power": int(c.get("power") or 0),
+            "food": int(c.get("food") or 0),
+            "wood": int(c.get("wood") or 0),
+            "stone": int(c.get("stone") or 0),
+            "gold": int(c.get("gold") or 0),
+            "gems": int(c.get("gems") or 0),
+            "total": int(c.get("food") or 0) + int(c.get("wood") or 0)
+                     + int(c.get("stone") or 0) + int(c.get("gold") or 0),
+        }
+        for c in characters
+    ]
+
+    grouped = None
+    if (group_by or "").lower() == "kingdom":
+        grouped = {}
+        for c in chars_out:
+            grouped.setdefault(str(c["kingdom"]), []).append(c)
+    return {
+        "bot_id": bid,
+        "resources_gathered": windows,
+        "in_cities_now": in_cities,
+        "characters": chars_out,
+        "characters_by_kingdom": grouped,
+    }
+
+@router.get("/bot/{bot_id}/history")
+def bot_history(bot_id: str, request: Request, limit: int = Query(30, ge=1, le=100), offset: int = Query(0, ge=0), user_id: Optional[str] = Query(None)):
+    """Paginated run records for the HISTORY tab (bot_id partitioned)."""
+    from app.models import RunHistoryDAO
+    bid = bot_id.strip()
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, bid, request)
+    if not uid:
+        return {"bot_id": bid, "runs": []}
+    runs = RunHistoryDAO.list_runs(bid, limit=limit, offset=offset, user_id=uid)
+    return {
+        "bot_id": bid,
+        "runs": [
+            {
+                "run_id": r.get("run_id"),
+                "started": r.get("started_at"),
+                "account": r.get("account_email") or "",
+                "length_minutes": int(r.get("duration_minutes") or 0),
+                "characters": r.get("characters_visited") or "0 / 0",
+                "food": int(r.get("food_gathered") or 0),
+                "wood": int(r.get("wood_gathered") or 0),
+                "stone": int(r.get("stone_gathered") or 0),
+                "gold": int(r.get("gold_gathered") or 0),
+            }
+            for r in runs
+        ],
+    }
+
+@router.get("/bot/{bot_id}/history/{run_id}/summary")
+def bot_run_summary(bot_id: str, run_id: str, request: Request, user_id: Optional[str] = Query(None)):
+    """Full metadata for the 'Farm run summary' modal (bot_id verified)."""
+    import json as _json
+    from app.models import RunHistoryDAO
+    bid = bot_id.strip()
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, bid, request)
+    if not uid:
+        raise HTTPException(status_code=404, detail="Run not found for this bot")
+    run = RunHistoryDAO.get_run(run_id.strip(), bot_id=bid, user_id=uid)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found for this bot")
+    chars = RunHistoryDAO.get_run_characters(run_id.strip())
+    try:
+        summary = _json.loads(run.get("summary_json") or "{}")
+    except Exception:
+        summary = {}
+    return {
+        "bot_id": bid,
+        "run_id": run.get("run_id"),
+        "account": run.get("account_email") or "",
+        "started": run.get("started_at"),
+        "length_minutes": int(run.get("duration_minutes") or 0),
+        "characters": run.get("characters_visited") or "0 / 0",
+        "totals": {
+            "food": int(run.get("food_gathered") or 0),
+            "wood": int(run.get("wood_gathered") or 0),
+            "stone": int(run.get("stone_gathered") or 0),
+            "gold": int(run.get("gold_gathered") or 0),
+        },
+        "characters": [
+            {
+                "id": c.get("role_id"),
+                "name": c.get("name") or "",
+                "kingdom": int(c.get("kingdom_id") or 0),
+                "city_hall": int(c.get("city_hall_level") or 0),
+                "power": int(c.get("power") or 0),
+                "visit_duration_seconds": int(c.get("visit_duration_seconds") or 0),
+                "food": int(c.get("food_gathered") or 0),
+                "wood": int(c.get("wood_gathered") or 0),
+                "stone": int(c.get("stone_gathered") or 0),
+                "gold": int(c.get("gold_gathered") or 0),
+                "details": c.get("details_json") or "{}",
+            }
+            for c in chars
+        ],
+        "summary": summary,
+    }
+@router.get("/fleet/overview")
+def fleet_overview(request: Request, user_id: Optional[str] = Query(None)):
+    """Fleet-wide metrics grouped by kingdom (accordion view). Scoped by tenant."""
+    from app.models import InventoryDAO, AccountDAO, RunHistoryDAO
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    uid = _resolve_tenant_uid(req_uid, None, request)
+    if not uid:
+        return {"total_instances": 0, "instances": [], "gathered_today": {"food": 0, "wood": 0, "stone": 0, "gold": 0}}
+    instances: Dict[str, Dict[str, Any]] = {}
+    con = get_db_connection()
+    rows = con.execute("""
+        SELECT bot_id, COUNT(*) AS chars,
+               SUM(food) AS food, SUM(wood) AS wood, SUM(stone) AS stone, SUM(gold) AS gold,
+               SUM(power) AS power
+        FROM character_inventories 
+        WHERE user_id = ?
+        GROUP BY bot_id
+    """, (uid,)).fetchall()
+    for r in rows:
+        bid = r["bot_id"] or ""
+        instances.setdefault(bid, {
+            "bot_id": bid, "characters": int(r["chars"] or 0),
+            "food": int(r["food"] or 0), "wood": int(r["wood"] or 0),
+            "stone": int(r["stone"] or 0), "gold": int(r["gold"] or 0),
+            "power": int(r["power"] or 0), "kingdoms": {},
+        })
+    krows = con.execute("""
+        SELECT bot_id, kingdom_id, COUNT(*) AS chars, SUM(power) AS power,
+               SUM(food + wood + stone + gold) AS rss
+        FROM character_inventories 
+        WHERE user_id = ?
+        GROUP BY bot_id, kingdom_id
+    """, (uid,)).fetchall()
+    for r in krows:
+        inst = instances.get(r["bot_id"] or "")
+        if inst:
+            inst["kingdoms"][str(r["kingdom_id"])] = {
+                "characters": int(r["chars"] or 0), "power": int(r["power"] or 0),
+                "rss": int(r["rss"] or 0),
+            }
+    today_total = {"food": 0, "wood": 0, "stone": 0, "gold": 0}
+    for bid in instances:
+        agg = RunHistoryDAO.aggregated_gathered(bid, 1, user_id=uid)
+        for k in today_total:
+            today_total[k] += agg.get(k, 0)
+    return {
+        "total_instances": len(instances),
+        "instances": list(instances.values()),
+        "gathered_today": today_total,
+    }
+@router.post("/bot/settings")
+def update_bot_settings(request: Request, payload: Dict[str, Any], user_id: Optional[str] = Query(None)):
+    """Update this tenant's bot settings."""
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip() or str(payload.get("user_id") or "")
+    bot_id = payload.get("bot_id") or "bot-1"
+    uid = _resolve_tenant_uid(req_uid, bot_id, request) or req_uid or "default"
+    
+    # Handle single key-value payload: {"key": "run_interval_hours", "value": "4"}
+    if "key" in payload and "value" in payload:
+        k = str(payload["key"])
+        v = str(payload["value"])
+        BotSettingsDAO.set(k, v, user_id=uid)
+        if bot_id:
+            BotSettingsDAO.set(f"{k}_{bot_id}", v, user_id=uid)
+    else:
+        for k, v in payload.items():
+            if k in ("user_id", "bot_id", "key", "value"):
+                continue
+            BotSettingsDAO.set(str(k), str(v), user_id=uid)
+            if bot_id:
+                BotSettingsDAO.set(f"{k}_{bot_id}", str(v), user_id=uid)
+                
+    return {"success": True, "settings": BotSettingsDAO.get_all(uid)}
+
+@router.get("/log/stream")
+@router.get("/backend/api/log/stream")
+def stream_logs(request: Request, user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    """Live RAW engine-log push over Server-Sent Events (debug view).
+    Strictly isolated per tenant user_id and bot_id.
+    """
+    import queue as _queue
+    from fastapi.responses import StreamingResponse
+    from app.services.activity_stream import activity_stream as _stream
+    from app.services.activity_logger import TenantActivityStream
+
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    bid = _normalize_bot_id(bot_id) if bot_id else "bot-1"
+    uid = _resolve_tenant_uid(req_uid, bid, request)
+
+    q = _stream.subscribe(raw=True, user_id=uid)
+    def _gen():
+        try:
+            backlog = []
+            if uid:
+                backlog = list(TenantActivityStream.get_buffer(bid, user_id=uid) or [])
+                if not backlog:
+                    backlog = list(_stream.get_recent(uid) or [])
+            for line in backlog[-100:]:
+                yield f"data: {line}\n\n"
+            yield "data: __READY__\n\n"
+            heartbeat = 0.0
+            while True:
+                try:
+                    line = q.get(timeout=15.0)
+                    if line:
+                        yield f"data: {line}\n\n"
+                except _queue.Empty:
+                    heartbeat += 1
+                    yield ": keep-alive\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            _stream.unsubscribe(q)
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/activity/stream")
+@router.get("/backend/api/activity/stream")
+def stream_activity(request: Request, user_id: Optional[str] = Query(None), bot_id: Optional[str] = Query(None)):
+    """Live CLEAN activity push over Server-Sent Events (customer feed).
+    Strictly isolated per tenant user_id and bot_id.
+    """
+    import queue as _queue
+    from fastapi.responses import StreamingResponse
+    from app.services.activity_stream import activity_stream as _stream
+    from app.services.activity_logger import TenantActivityStream
+
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    bid = _normalize_bot_id(bot_id) if bot_id else "bot-1"
+    uid = _resolve_tenant_uid(req_uid, bid, request)
+
+    q = _stream.subscribe(raw=False, user_id=uid)
+    def _gen():
+        try:
+            backlog = []
+            if uid:
+                backlog = list(TenantActivityStream.get_buffer(bid, user_id=uid) or [])
+                if not backlog:
+                    backlog = list(TenantActivityStream.get_buffer("bot-1", user_id=uid) or [])
+                if not backlog:
+                    backlog = list(_stream.get_recent(uid) or [])
+            if not backlog:
+                backlog = list(TenantActivityStream.get_buffer(bid) or TenantActivityStream.get_buffer("bot-1") or [])
+            for line in backlog[-100:]:
+                yield f"data: {line}\n\n"
+            yield "data: __READY__\n\n"
+            while True:
+                try:
+                    line = q.get(timeout=15.0)
+                    if line:
+                        yield f"data: {line}\n\n"
+                except _queue.Empty:
+                    yield ": keep-alive\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            _stream.unsubscribe(q)
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/activity/recent")
+@router.get("/backend/api/activity/recent")
+@router.get("/log/recent")
+@router.get("/backend/api/log/recent")
+async def get_recent_activity(
+    request: Request,
+    bot_id: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+    names: Optional[str] = Query(None),
+    limit: int = Query(100, le=500)
+):
+    """Retrieve up to 100 recent activity messages strictly partitioned by bot_id and user_id."""
+    req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
+    bid = _normalize_bot_id(bot_id) if bot_id else "bot-1"
+    uid = _resolve_tenant_uid(req_uid, bid, request)
+
+    from app.services.activity_logger import TenantActivityStream
+    from app.services.activity_stream import activity_stream as _stream
+
+    buffer = TenantActivityStream.get_buffer(bid, user_id=uid or None)
+    if not buffer and uid:
+        buffer = TenantActivityStream.get_buffer("bot-1", user_id=uid)
+    if not buffer and uid:
+        buffer = _stream.get_recent(uid)
+    if not buffer:
+        buffer = TenantActivityStream.get_buffer(bid) or TenantActivityStream.get_buffer("bot-1") or TenantActivityStream.get_buffer("bot-2404")
+    out = list(buffer)[-limit:] if buffer else []
+    return {"logs": out, "lines": out, "count": len(out), "bot_id": bid}
+@router.get("/config/gather")
+def get_gather_config(account_id: Optional[str] = None, role_id: Optional[str] = None, user_id: str = Query(...)):
+    """Retrieve gathering configurations."""
+    if role_id:
+        char = CharacterDAO.get_by_role_id(str(role_id), user_id)
+        if char:
+            s = CharacterSettingsDAO.get_by_character_id(char["id"])
+            return {"success": True, "gather": s.get("gather", {})}
+    global_s = BotSettingsDAO.get("gather_config", user_id=user_id)
+    if global_s:
+        try:
+            return {"success": True, "gather": json.loads(global_s)}
+        except Exception:
+            pass
+    return {
+        "success": True,
+        "gather": {
+            "food": 1,
+            "wood": 1,
+            "stone": 1,
+            "gold": 0,
+            "gem": 0,
+            "max_node_level": "Level 6 and below",
+            "only_finishable": True,
+            "skip_partially": True,
+            "max_marches": "auto",
+            "territory": "alliance_preferred",
+            "avoid_territory": True,
+            "avoid_enemy_territory": True,
+            "avoidEnemyTerritory": True,
+            "recall_on_attack": True
+        }
+    }
+@router.post("/config/gather")
+def save_gather_config(payload: Dict[str, Any], user_id: str = Query(...)):
+    """Save gathering configurations (tenant-scoped)."""
+    target_scope = payload.get("scope", "all")
+    account_id = payload.get("account_id")
+    role_id = payload.get("role_id")
+    gather_data = payload.get("gather", {})
+
+    # Detect user's territory avoidance setting from all frontend key variants
+    if "avoid_enemy_territory" in gather_data:
+        avoid_t = bool(gather_data["avoid_enemy_territory"])
+    elif "avoidEnemyTerritory" in gather_data:
+        avoid_t = bool(gather_data["avoidEnemyTerritory"])
+    elif "avoid_other_alliance_territories" in gather_data:
+        avoid_t = bool(gather_data["avoid_other_alliance_territories"])
+    elif "avoid_territory" in gather_data:
+        avoid_t = bool(gather_data["avoid_territory"])
+    elif gather_data.get("territory") == "open_world":
+        avoid_t = False
+    elif gather_data.get("territory") == "alliance_preferred":
+        avoid_t = True
+    else:
+        avoid_t = True
+
+    # Synchronize across all known keys so every backend consumer reads the exact state
+    gather_data["avoid_territory"] = avoid_t
+    gather_data["avoid_enemy_territory"] = avoid_t
+    gather_data["avoidEnemyTerritory"] = avoid_t
+    gather_data["avoid_other_alliance_territories"] = avoid_t
+    gather_data["territory"] = "alliance_preferred" if avoid_t else "open_world"
+
+    # Synchronize skip_partially across all frontend key variants
+    if "skip_partially" in gather_data:
+        skip_p = bool(gather_data["skip_partially"])
+    elif "skip_partially_gathered" in gather_data:
+        skip_p = bool(gather_data["skip_partially_gathered"])
+    elif "skip_partially_gathered_nodes" in gather_data:
+        skip_p = bool(gather_data["skip_partially_gathered_nodes"])
+    elif "skip_partially_depleted" in gather_data:
+        skip_p = bool(gather_data["skip_partially_depleted"])
+    elif "skipPartial" in gather_data:
+        skip_p = bool(gather_data["skipPartial"])
+    else:
+        skip_p = True
+
+    gather_data["skip_partially"] = skip_p
+    gather_data["skip_partially_gathered"] = skip_p
+    gather_data["skip_partially_gathered_nodes"] = skip_p
+    gather_data["skip_partially_depleted"] = skip_p
+    gather_data["skipPartial"] = skip_p
+
+    # Synchronize auto_balance across all variants
+    if "auto_balance" in gather_data:
+        auto_b = bool(gather_data["auto_balance"])
+    elif "auto_balance_lowest_rss" in gather_data:
+        auto_b = bool(gather_data["auto_balance_lowest_rss"])
+    elif "autoBalanceLowest" in gather_data:
+        auto_b = bool(gather_data["autoBalanceLowest"])
+    elif "prioritize_lowest_rss" in gather_data:
+        auto_b = bool(gather_data["prioritize_lowest_rss"])
+    else:
+        auto_b = False
+
+    gather_data["auto_balance"] = auto_b
+    gather_data["auto_balance_lowest_rss"] = auto_b
+    gather_data["prioritize_lowest_rss"] = auto_b
+
+    # Synchronize per-resource march counts cleanly and honestly
+    marches_map = gather_data.get("marches") if isinstance(gather_data.get("marches"), dict) else {}
+    for r in ["food", "wood", "stone", "gold"]:
+        val = gather_data.get(r)
+        cnt = None
+        if isinstance(val, bool):
+            cnt = 1 if val else 0
+        elif isinstance(val, (int, float)):
+            cnt = max(0, int(val))
+        elif isinstance(val, str) and val.isdigit():
+            cnt = max(0, int(val))
+        elif f"{r}_marches" in gather_data:
+            try:
+                cnt = max(0, int(gather_data[f"{r}_marches"]))
+            except Exception:
+                cnt = None
+        elif r in marches_map:
+            try:
+                cnt = max(0, int(marches_map[r]))
+            except Exception:
+                cnt = None
+
+        if cnt is None:
+            cnt = 1 if r in ("food", "wood", "stone") else 0
+
+        gather_data[r] = (cnt > 0)
+        gather_data[f"{r}_marches"] = cnt
+        marches_map[r] = cnt
+
+    gather_data["marches"] = marches_map
+
+    # Synchronize max_node_level / max_level
+    raw_max_lvl = gather_data.get("max_node_level")
+    if raw_max_lvl is None:
+        raw_max_lvl = gather_data.get("max_level")
+    if raw_max_lvl is not None:
+        gather_data["max_node_level"] = raw_max_lvl
+        gather_data["max_level"] = raw_max_lvl
+
+    BotSettingsDAO.set("gather_config", json.dumps(gather_data), user_id)
+    if target_scope == "all":
+        chars = CharacterDAO.get_all(user_id=user_id)
+        for c in chars:
+            CharacterSettingsDAO.upsert(c["id"], gather=gather_data)
+    elif target_scope == "account" and account_id and str(account_id) != "all":
+        acc = AccountDAO.get_by_id(int(account_id), user_id)
+        if acc:
+            chars = CharacterDAO.get_by_account_id(int(account_id))
+            for c in chars:
+                CharacterSettingsDAO.upsert(c["id"], gather=gather_data)
+    elif role_id:
+        char = CharacterDAO.get_by_role_id(str(role_id), user_id)
+        if char:
+            CharacterSettingsDAO.upsert(char["id"], gather=gather_data)
+    return {"success": True, "gather": gather_data}
+
+
+@router.get("/config/train")
+def get_train_config(account_id: Optional[str] = None, role_id: Optional[str] = None, user_id: str = Query(...)):
+    """Retrieve troop training configurations."""
+    if role_id:
+        char = CharacterDAO.get_by_role_id(str(role_id), user_id)
+        if char:
+            s = CharacterSettingsDAO.get_by_character_id(char["id"])
+            return {
+                "success": True,
+                "train": {
+                    "enabled": bool(s.get("training", {}).get("enabled", True)),
+                    "train_pct": s.get("train_pct", 100),
+                    "train_count_custom": s.get("train_count_custom"),
+                    "auto_collect": bool(s.get("training", {}).get("auto_collect", True)),
+                    "tiers": s.get("tiers") or {
+                        "infantry": "t1",
+                        "cavalry": "t1",
+                        "archery": "t1",
+                        "siege": "t1"
+                    }
+                }
+            }
+    global_s = BotSettingsDAO.get("train_config", user_id=user_id)
+    if global_s:
+        try:
+            return {"success": True, "train": json.loads(global_s)}
+        except Exception:
+            pass
+    return {
+        "success": True,
+        "train": {
+            "enabled": True,
+            "train_pct": 100,
+            "train_count_custom": None,
+            "auto_collect": True,
+            "tiers": {
+                "infantry": "t1",
+                "cavalry": "t1",
+                "archery": "t1",
+                "siege": "t1"
+            }
+        }
+    }
+
+
+@router.post("/config/train")
+def save_train_config(payload: Dict[str, Any], user_id: str = Query(...)):
+    """Save troop training configurations (tenant-scoped)."""
+    target_scope = payload.get("scope", "all")
+    account_id = payload.get("account_id")
+    role_id = payload.get("role_id")
+    train_data = payload.get("train") or payload.get("training") or {}
+
+    enabled = bool(train_data.get("enabled", True))
+    auto_collect = bool(train_data.get("auto_collect", True))
+    raw_pct = train_data.get("train_pct", 100)
+    train_pct = max(1, min(100, int(raw_pct))) if raw_pct is not None else 100
+    custom_count = train_data.get("train_count_custom")
+    train_count_custom = int(custom_count) if custom_count is not None and str(custom_count).isdigit() and int(custom_count) > 0 else None
+
+    # Tiers dict normalization (infantry, cavalry, archery, siege)
+    raw_tiers = train_data.get("tiers") or {}
+    if not raw_tiers:
+        raw_tiers = {
+            "infantry": train_data.get("infantry") or train_data.get("trainInfantry"),
+            "cavalry": train_data.get("cavalry") or train_data.get("trainCavalry"),
+            "archery": train_data.get("archery") or train_data.get("archers") or train_data.get("trainArchers"),
+            "siege": train_data.get("siege") or train_data.get("trainSiege"),
+        }
+    tiers = {}
+    for cat in ("infantry", "cavalry", "archery", "siege"):
+        v_val = raw_tiers.get(cat)
+        if v_val is None and cat == "archery":
+            v_val = raw_tiers.get("archers")
+        v = str(v_val if v_val is not None else "t1").strip().lower()
+        if v in ("off", "none", "disabled", "false", "0"):
+            tiers[cat] = "off"
+        elif v in ("t1", "1"):
+            tiers[cat] = "t1"
+        elif v in ("t2", "2"):
+            tiers[cat] = "t2"
+        elif v in ("t3", "3"):
+            tiers[cat] = "t3"
+        elif v in ("t4", "4"):
+            tiers[cat] = "t4"
+        elif v in ("t5", "5"):
+            tiers[cat] = "t5"
+        else:
+            tiers[cat] = v
+
+    normalized_train = {
+        "enabled": enabled,
+        "auto_collect": auto_collect,
+        "train_pct": train_pct,
+        "train_count_custom": train_count_custom,
+        "tiers": tiers
+    }
+
+    BotSettingsDAO.set("train_config", json.dumps(normalized_train), user_id)
+    BotSettingsDAO.set("training_enabled", "true" if enabled else "false", user_id)
+
+    if target_scope == "all":
+        chars = CharacterDAO.get_all(user_id=user_id)
+        if not chars:
+            chars = CharacterDAO.get_all()
+        for c in chars:
+            CharacterSettingsDAO.upsert(
+                c["id"],
+                train_pct=train_pct,
+                train_count_custom=train_count_custom,
+                tiers=tiers
+            )
+    elif target_scope == "account" and account_id and str(account_id) != "all":
+        acc = AccountDAO.get_by_id(int(account_id), user_id)
+        if not acc:
+            acc = AccountDAO.get_by_id(int(account_id))
+        if acc:
+            chars = CharacterDAO.get_by_account_id(int(account_id))
+            for c in chars:
+                CharacterSettingsDAO.upsert(
+                    c["id"],
+                    train_pct=train_pct,
+                    train_count_custom=train_count_custom,
+                    tiers=tiers
+                )
+    elif role_id:
+        char = CharacterDAO.get_by_role_id(str(role_id), user_id)
+        if not char:
+            char = CharacterDAO.get_by_role_id(str(role_id))
+        if char:
+            CharacterSettingsDAO.upsert(
+                char["id"],
+                train_pct=train_pct,
+                train_count_custom=train_count_custom,
+                tiers=tiers
+            )
+
+    return {"success": True, "train": normalized_train}
+
+
+@router.get("/v1/bot/{bot_id}/config")
+def get_v1_bot_config(bot_id: str, email: Optional[str] = None, role_id: Optional[str] = None, user_id: str = Query(...)):
+    """Retrieve full scoped automation configurations."""
+    if role_id:
+        char = CharacterDAO.get_by_role_id(str(role_id), user_id)
+        if char:
+            s = CharacterSettingsDAO.get_by_character_id(char["id"])
+            return {"success": True, "scope": "role", "role_id": str(role_id), "settings": s}
+    if email:
+        acc = AccountDAO.get_by_email(email, user_id)
+        if acc:
+            chars = CharacterDAO.get_by_account_id(acc["id"])
+            if chars:
+                s = CharacterSettingsDAO.get_by_character_id(chars[0]["id"])
+                return {"success": True, "scope": "account", "email": email, "settings": s}
+    # Fallback to global tenant settings
+    global_cfg = BotSettingsDAO.get_all(user_id=user_id)
+    return {"success": True, "scope": "global", "settings": global_cfg}
+@router.post("/v1/bot/{bot_id}/config")
+def save_v1_bot_config(bot_id: str, payload: Dict[str, Any], user_id: str = Query(...)):
+    """
+    Hierarchical Configuration Scoping Engine:
+    - Scope 'role' or role_id present: updates only that specific character row.
+    - Scope 'email' or email present: updates only characters owned by that specific email account.
+    - Scope 'all' / global: updates all character rows owned by this user_id.
+    """
+    scope = payload.get("scope", "all")
+    email = payload.get("email")
+    role_id = payload.get("role_id")
+    config = payload.get("config") or payload.get("settings") or payload
+    combat_input = config.get("combat") if isinstance(config.get("combat"), dict) else {}
+    mirror_combat = (config.get("mirror") or {}).get("combat", {}) if isinstance(config.get("mirror"), dict) else {}
+
+    barbs_val = config.get("barbs")
+    if barbs_val is None:
+        barbs_val = combat_input.get("barbs")
+    if barbs_val is None:
+        barbs_val = mirror_combat.get("barbs")
+
+    highest_barb_level_val = config.get("highestBarbLevel") or config.get("highest_barb_level") or combat_input.get("highest_barb_level") or mirror_combat.get("highest_barb_level")
+    skip_barbs_below_val = config.get("skipBarbsBelow") or config.get("skip_barbs_below") or combat_input.get("skip_barbs_below") or mirror_combat.get("skip_barbs_below")
+    primary_cmd_val = config.get("barbPrimaryCommander") or config.get("primary_commander") or combat_input.get("primary_commander") or mirror_combat.get("primary_commander")
+    secondary_cmd_val = config.get("barbSecondaryCommander") or config.get("secondary_commander") or combat_input.get("secondary_commander") or mirror_combat.get("secondary_commander")
+    combat_rounds_val = config.get("combatRounds") or config.get("combat_rounds") or combat_input.get("combat_rounds") or mirror_combat.get("combat_rounds")
+    
+    dispatch_all_val = config.get("dispatchAllMarches")
+    if dispatch_all_val is None:
+        dispatch_all_val = config.get("dispatch_all_marches")
+    if dispatch_all_val is None:
+        dispatch_all_val = combat_input.get("dispatch_all_marches")
+    if dispatch_all_val is None:
+        dispatch_all_val = mirror_combat.get("dispatch_all_marches")
+
+    min_barb_lvl = config.get("min_barb_level") or combat_input.get("min_barb_level")
+    if min_barb_lvl is None and skip_barbs_below_val and skip_barbs_below_val != "None":
+        try:
+            min_barb_lvl = int(str(skip_barbs_below_val).replace("L", ""))
+        except Exception:
+            pass
+
+    max_barb_lvl = config.get("max_barb_level") or combat_input.get("max_barb_level")
+    if max_barb_lvl is None and highest_barb_level_val and highest_barb_level_val != "Max Unlocked":
+        try:
+            max_barb_lvl = int(str(highest_barb_level_val).replace("L", ""))
+        except Exception:
+            pass
+
+    max_marches = config.get("max_combat_marches") or combat_input.get("max_combat_marches")
+    if max_marches is None and dispatch_all_val is not None:
+        max_marches = 5 if bool(dispatch_all_val) else 1
+
+    combat_patch = {
+        "barbs": bool(barbs_val) if barbs_val is not None else None,
+        "highest_barb_level": str(highest_barb_level_val) if highest_barb_level_val is not None else None,
+        "skip_barbs_below": str(skip_barbs_below_val) if skip_barbs_below_val is not None else None,
+        "primary_commander": str(primary_cmd_val) if primary_cmd_val is not None else None,
+        "secondary_commander": str(secondary_cmd_val) if secondary_cmd_val is not None else None,
+        "combat_rounds": int(combat_rounds_val) if combat_rounds_val is not None else None,
+        "dispatch_all_marches": bool(dispatch_all_val) if dispatch_all_val is not None else None,
+        "min_barb_level": min_barb_lvl,
+        "max_barb_level": max_barb_lvl,
+        "max_combat_marches": max_marches,
+        "hold_position": config.get("hold_position", combat_input.get("hold_position", config.get("hold_position_after_attack"))),
+    }
+    combat_patch = {k: v for k, v in combat_patch.items() if v is not None}
+    hospital_patch = config.get("hospital") or {
+        "heal_troops": config.get("healTroops", config.get("heal_troops")),
+        "heal_batch": config.get("healBatch", config.get("heal_batch"))
+    }
+    hospital_patch = {k: v for k, v in hospital_patch.items() if v is not None}
+    alliance_input = config.get("alliance") if isinstance(config.get("alliance"), dict) else {}
+    mirror_alliance = (config.get("mirror") or {}).get("alliance", {}) if isinstance(config.get("mirror"), dict) else {}
+    
+    donate_val = None
+    for k in ("donateTech", "donate_tech", "donate_to_tech", "alliance_donate_tech", "tech_donation"):
+        if k in alliance_input and alliance_input[k] is not None:
+            donate_val = bool(alliance_input[k])
+            break
+        if k in config and config[k] is not None:
+            donate_val = bool(config[k])
+            break
+        if k in mirror_alliance and mirror_alliance[k] is not None:
+            donate_val = bool(mirror_alliance[k])
+            break
+
+    alliance_patch = {
+        "help_alliance_members": config.get("allianceHelp", config.get("help_alliance_members", alliance_input.get("help_alliance_members", mirror_alliance.get("one_click_help")))),
+        "gather_resource_pit": config.get("alliancePit", config.get("gather_alliance_resource_pit", alliance_input.get("gather_resource_pit"))),
+        "donate_tech": donate_val if donate_val is not None else alliance_input.get("donate_tech"),
+        "claim_gifts": config.get("allianceGifts", config.get("claim_alliance_gifts", alliance_input.get("claim_gifts")))
+    }
+    alliance_patch = {k: v for k, v in alliance_patch.items() if v is not None}
+    daily_patch = config.get("daily_claims") or {
+        "vip_chest": config.get("vipChest", config.get("vip_chest")),
+        "auto_scout": config.get("autoScout", config.get("auto_scout")),
+        "daily_quest_chests": config.get("dailyQuestChests", config.get("daily_quest_chests")),
+        "chronicle": config.get("chronicle", True)
+    }
+    daily_patch = {k: v for k, v in daily_patch.items() if v is not None}
+    city_patch = config.get("city") or {
+        "collect_resources": config.get("collectCity", config.get("collect_resources"))
+    }
+    city_patch = {k: v for k, v in city_patch.items() if v is not None}
+    gather_patch = config.get("gather") or config.get("gathering") or {}
+    # Training / Tiers extraction
+    tiers_patch = config.get("tiers") or config.get("train") or config.get("training") or {}
+    raw_inf = config.get("trainInfantry") or config.get("infantry") or (tiers_patch.get("infantry") if isinstance(tiers_patch, dict) else None)
+    raw_cav = config.get("trainCavalry") or config.get("cavalry") or (tiers_patch.get("cavalry") if isinstance(tiers_patch, dict) else None)
+    raw_arch = config.get("trainArchers") or config.get("archers") or config.get("archery") or (tiers_patch.get("archery") or tiers_patch.get("archers") if isinstance(tiers_patch, dict) else None)
+    raw_sge = config.get("trainSiege") or config.get("siege") or (tiers_patch.get("siege") if isinstance(tiers_patch, dict) else None)
+    
+    if raw_inf is not None or raw_cav is not None or raw_arch is not None or raw_sge is not None:
+        tiers_normalized = {}
+        for cat, val in [("infantry", raw_inf), ("cavalry", raw_cav), ("archery", raw_arch), ("siege", raw_sge)]:
+            if val is not None:
+                v_str = str(val).strip().lower()
+                if v_str in ("off", "none", "disabled", "false", "0"):
+                    tiers_normalized[cat] = "off"
+                else:
+                    tiers_normalized[cat] = v_str
+        tiers_patch = tiers_normalized
+
+    auto_train = config.get("autoTrainTroops")
+    if auto_train is None:
+        auto_train = config.get("training_enabled")
+    if auto_train is not None:
+        BotSettingsDAO.set("training_enabled", "true" if auto_train else "false", user_id)
+
+    if tiers_patch:
+        existing_train_raw = BotSettingsDAO.get("train_config", user_id=user_id)
+        existing_train = {}
+        if existing_train_raw:
+            try:
+                existing_train = json.loads(existing_train_raw)
+            except Exception:
+                pass
+        existing_train["tiers"] = {**(existing_train.get("tiers") or {}), **tiers_patch}
+        if auto_train is not None:
+            existing_train["enabled"] = bool(auto_train)
+        BotSettingsDAO.set("train_config", json.dumps(existing_train), user_id)
+
+    target_chars = []
+    if (scope == "role" or role_id) and role_id:
+        c = CharacterDAO.get_by_role_id(str(role_id), user_id)
+        if c:
+            target_chars.append(c)
+    elif (scope in ("email", "account") or email) and email:
+        acc = AccountDAO.get_by_email(str(email), user_id)
+        if acc:
+            target_chars = CharacterDAO.get_by_account_id(acc["id"])
+    else:
+        # All fleet accounts
+        target_chars = CharacterDAO.get_all(user_id=user_id)
+    updated_count = 0
+    for ch in target_chars:
+        CharacterSettingsDAO.upsert(
+            character_id=ch["id"],
+            tiers=tiers_patch if tiers_patch else None,
+            gather=gather_patch if gather_patch else None,
+            combat=combat_patch if combat_patch else None,
+            hospital=hospital_patch if hospital_patch else None,
+            alliance=alliance_patch if alliance_patch else None,
+            daily_claims=daily_patch if daily_patch else None,
+            city=city_patch if city_patch else None
+        )
+        updated_count += 1
+    return {
+        "success": True,
+        "bot_id": bot_id,
+        "scope": scope,
+        "email": email,
+        "role_id": role_id,
+        "characters_updated": updated_count
+    }
+

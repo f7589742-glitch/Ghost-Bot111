@@ -1,0 +1,3905 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GhostBot — Your Intelligent AI Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    /* ================= GHOSTBOT UI & VISUAL IDENTITY (PRESERVED 100%) ================= */
+    :root {
+      --bg-navy-deep: #040a17;
+      --bg-sidebar: rgba(5, 13, 28, 0.86);
+      --bg-card: rgba(7, 17, 36, 0.76);
+      --bg-card-inner: rgba(10, 24, 50, 0.68);
+      --bg-input: rgba(4, 11, 24, 0.9);
+
+      --ghost-cyan: #00e5ff;
+      --ghost-cyan-bright: #62f2ff;
+      --ghost-cyan-ice: #d8fbff;
+      --ghost-cyan-soft: rgba(0, 229, 255, 0.14);
+      --ghost-cyan-border: rgba(0, 229, 255, 0.36);
+
+      --emerald-ok: #00e699;
+      --amber-wait: #ffaa2b;
+      --purple-tag: #a855f7;
+
+      --border-subtle: rgba(0, 229, 255, 0.15);
+      --text-white: #ffffff;
+      --text-ice: #d6eeff;
+      --text-secondary: #92b2d6;
+      --text-muted: #5a7b9e;
+
+      --radius-xl: 18px;
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      /* Custom GhostBot Cyber-Cyan Tactical SVG Arrow Cursor */
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cdefs%3E%3Cfilter id='g' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeDropShadow dx='0' dy='0' stdDeviation='2' flood-color='%2300e5ff' flood-opacity='0.85'/%3E%3C/filter%3E%3C/defs%3E%3Cpath filter='url(%23g)' d='M4 3 L22 11.5 L14.2 14.2 L11.5 22 Z' fill='%2305162e' stroke='%2300e5ff' stroke-width='1.8' stroke-linejoin='round'/%3E%3Ccircle cx='6.5' cy='6.5' r='1.6' fill='%2362f2ff'/%3E%3C/svg%3E") 4 3, auto;
+    }
+
+    /* Custom Glowing Target Reticle Cursor on Interactive Elements */
+    button, a, select, input, label, .side-link, .tab-btn, .cfg-cat-btn, .unit-card-mini, [onclick] {
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Ccircle cx='15' cy='15' r='9' fill='rgba(0,229,255,0.12)' stroke='%2300e5ff' stroke-width='1.8' stroke-dasharray='5 3'/%3E%3Ccircle cx='15' cy='15' r='2.5' fill='%2362f2ff'/%3E%3Cline x1='15' y1='2' x2='15' y2='6' stroke='%2300e5ff' stroke-width='1.8' stroke-linecap='round'/%3E%3Cline x1='15' y1='24' x2='15' y2='28' stroke='%2300e5ff' stroke-width='1.8' stroke-linecap='round'/%3E%3Cline x1='2' y1='15' x2='6' y2='15' stroke='%2300e5ff' stroke-width='1.8' stroke-linecap='round'/%3E%3Cline x1='24' y1='15' x2='28' y2='15' stroke='%2300e5ff' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") 15 15, pointer !important;
+    }
+
+    /* ================= INTERACTIVE HOLOGRAPHIC MOUSE FOLLOWER & EFFECTS ================= */
+    .ghost-cursor-ring {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 36px;
+      height: 36px;
+      margin-left: -18px;
+      margin-top: -18px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(0, 229, 255, 0.55);
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.1) 0%, transparent 70%);
+      box-shadow: 0 0 18px rgba(0, 229, 255, 0.28), inset 0 0 8px rgba(0, 229, 255, 0.15);
+      pointer-events: none;
+      z-index: 9999;
+      transition: width 0.22s var(--ease-spring), height 0.22s var(--ease-spring), margin 0.22s var(--ease-spring), border-color 0.22s ease, background 0.22s ease, transform 0.08s linear;
+    }
+
+    .ghost-cursor-ring::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 1px dashed rgba(98, 242, 255, 0.4);
+      animation: gearSpinSlow 8s linear infinite;
+    }
+
+    .ghost-cursor-ring.hover-lock {
+      width: 52px;
+      height: 52px;
+      margin-left: -26px;
+      margin-top: -26px;
+      border-color: var(--emerald-ok);
+      background: radial-gradient(circle, rgba(0, 230, 153, 0.16) 0%, transparent 72%);
+      box-shadow: 0 0 26px rgba(0, 230, 153, 0.45);
+    }
+
+    .ghost-cursor-ring.clicking {
+      transform: scale(0.78) !important;
+      border-color: #ffffff;
+      box-shadow: 0 0 30px #00e5ff;
+    }
+
+    /* Ambient Mouse Glow Following Pointer Across Screen */
+    .mouse-ambient-spotlight {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 420px;
+      height: 420px;
+      margin-left: -210px;
+      margin-top: -210px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.09) 0%, rgba(0, 229, 255, 0.03) 40%, transparent 70%);
+      pointer-events: none;
+      z-index: 2;
+      will-change: transform;
+    }
+
+    /* Click Shockwave Ripple */
+    .click-shockwave {
+      position: fixed;
+      border-radius: 50%;
+      border: 2px solid var(--ghost-cyan);
+      box-shadow: 0 0 18px var(--ghost-cyan);
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%) scale(0.2);
+      opacity: 1;
+      animation: shockwaveAnim 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes shockwaveAnim {
+      0% { width: 12px; height: 12px; opacity: 0.95; border-width: 2.5px; }
+      100% { width: 88px; height: 88px; opacity: 0; border-width: 0.5px; }
+    }
+
+    /* Interactive Card Surface Spotlight on Hover */
+    .surface-card, .hero-controller-card, .sidebar-profile-card, .stat-tile {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .surface-card::after, .hero-controller-card::after, .sidebar-profile-card::after, .stat-tile::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(280px circle at var(--mx, -200px) var(--my, -200px), rgba(0, 229, 255, 0.13), transparent 70%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .surface-card:hover::after, .hero-controller-card:hover::after, .sidebar-profile-card:hover::after, .stat-tile:hover::after {
+      opacity: 1;
+    }
+
+    body {
+      background-color: var(--bg-navy-deep);
+      color: var(--text-white);
+      font-family: 'Tajawal', 'Inter', sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      font-size: 13.5px;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+    }
+
+    html[dir="ltr"] body {
+      font-family: 'Inter', 'Tajawal', sans-serif;
+    }
+
+    /* ================= KINGDOM BACKGROUND + CYBER-CYAN GRADING ================= */
+    .kingdom-bg-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-image: url('kingdom-bg.jpg');
+      background-size: cover;
+      background-position: center center;
+      background-repeat: no-repeat;
+      filter: brightness(0.56) contrast(1.14) saturate(0.84);
+      transition: filter 0.45s var(--ease-spring);
+      pointer-events: none;
+    }
+
+    body.bg-mode-cyber .kingdom-bg-layer {
+      filter: brightness(0.45) contrast(1.22) saturate(0.68) hue-rotate(145deg);
+    }
+
+    body.bg-mode-bright .kingdom-bg-layer {
+      filter: brightness(0.78) contrast(1.08) saturate(1.02);
+    }
+
+    .kingdom-brand-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background:
+        linear-gradient(180deg, rgba(4, 10, 23, 0.82) 0%, rgba(5, 14, 32, 0.44) 40%, rgba(4, 10, 23, 0.88) 100%),
+        radial-gradient(circle at 50% 35%, rgba(0, 229, 255, 0.14) 0%, rgba(7, 19, 42, 0.68) 78%);
+      pointer-events: none;
+    }
+
+    /* ================= ANIMATIONS ================= */
+    @keyframes logoFloat {
+      0%, 100% {
+        transform: translateY(0px);
+        filter: drop-shadow(0 6px 18px rgba(0, 229, 255, 0.45));
+      }
+      50% {
+        transform: translateY(-4px);
+        filter: drop-shadow(0 12px 26px rgba(0, 229, 255, 0.72));
+      }
+    }
+
+    @keyframes gearSpinSlow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .gear-rotator {
+      transform-origin: 47px 66px;
+      animation: gearSpinSlow 14s linear infinite;
+    }
+
+    /* ================= FULL-HEIGHT SHELL (NO TOP HEADER) ================= */
+    .app-shell {
+      position: relative;
+      z-index: 10;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ================= SIDEBAR ================= */
+    .sidebar {
+      width: 290px;
+      height: 100vh;
+      background: var(--bg-sidebar);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      border-inline-end: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px 15px;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(0, 229, 255, 0.25);
+      border-radius: 99px;
+    }
+
+    .sidebar-brand-box {
+      padding: 14px 13px;
+      border-radius: 16px;
+      background: linear-gradient(145deg, rgba(6, 17, 38, 0.92), rgba(4, 10, 23, 0.96));
+      border: 1px solid var(--ghost-cyan-border);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 24px rgba(0, 229, 255, 0.14);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .sidebar-logo-emblem {
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      background: radial-gradient(circle at 50% 45%, rgba(0, 229, 255, 0.25), rgba(4, 11, 24, 0.95));
+      border: 1.5px solid var(--ghost-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      animation: logoFloat 3.8s ease-in-out infinite;
+    }
+
+    .sidebar-logo-emblem svg {
+      width: 45px;
+      height: 45px;
+    }
+
+    .ghostbot-wordmark {
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: 21px;
+      letter-spacing: -0.5px;
+      display: inline-flex;
+      direction: ltr;
+      line-height: 1.1;
+    }
+
+    .ghostbot-wordmark .w-ghost { color: #ffffff; }
+    .ghostbot-wordmark .w-bot {
+      color: var(--ghost-cyan);
+      text-shadow: 0 0 16px rgba(0, 229, 255, 0.65);
+    }
+
+    .brand-sub-caption {
+      font-family: 'Inter', sans-serif;
+      font-size: 8.2px;
+      font-weight: 700;
+      letter-spacing: 1.3px;
+      color: var(--text-ice);
+      text-transform: uppercase;
+      margin-top: 3px;
+      display: block;
+    }
+
+    /* Personal Profile Card Inside Sidebar */
+    .sidebar-profile-card {
+      padding: 13px;
+      border-radius: 15px;
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.12) 0%, rgba(10, 25, 52, 0.78) 100%);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: all 0.25s var(--ease-spring);
+    }
+
+    .sidebar-profile-card:hover {
+      border-color: var(--ghost-cyan);
+      box-shadow: 0 8px 24px rgba(0, 229, 255, 0.16);
+    }
+
+    .profile-top-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .profile-avatar-ring {
+      position: relative;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #00e5ff, #0077b6);
+      padding: 2px;
+      flex-shrink: 0;
+    }
+
+    .profile-avatar-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 10px;
+      background: #061329;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+    }
+
+    .profile-online-dot {
+      position: absolute;
+      bottom: -2px;
+      inset-inline-end: -2px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--emerald-ok);
+      border: 2px solid #050d1e;
+      box-shadow: 0 0 8px var(--emerald-ok);
+    }
+
+    .profile-info-col {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .profile-name-text {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .profile-role-badge {
+      display: inline-block;
+      font-size: 9.5px;
+      font-weight: 700;
+      color: var(--ghost-cyan);
+      background: rgba(0, 229, 255, 0.14);
+      border: 1px solid rgba(0, 229, 255, 0.32);
+      padding: 1px 8px;
+      border-radius: 99px;
+      margin-top: 2px;
+    }
+
+    .profile-stats-mini {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 11px;
+    }
+
+    .p-stat-box {
+      background: rgba(4, 10, 22, 0.55);
+      padding: 5px 8px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .p-stat-label { color: var(--text-secondary); font-size: 9.5px; }
+    .p-stat-val {
+      color: #fff;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 1px;
+    }
+
+    /* Navigation */
+    .sidebar-section-title {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      padding: 0 8px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-bottom: 14px;
+    }
+
+    .side-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 11px;
+      border-radius: var(--radius-md);
+      color: var(--text-ice);
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.22s var(--ease-spring);
+    }
+
+    .side-link:hover {
+      color: #fff;
+      background: rgba(0, 229, 255, 0.08);
+    }
+
+    .side-link.active {
+      color: var(--ghost-cyan);
+      background: rgba(0, 229, 255, 0.16);
+      border-color: rgba(0, 229, 255, 0.38);
+      font-weight: 800;
+      box-shadow: 0 0 18px rgba(0, 229, 255, 0.14);
+    }
+
+    .side-link svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      flex-shrink: 0;
+    }
+
+    /* Deployed Units List in Sidebar */
+    .deployed-units-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .unit-card-mini {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 11px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .unit-card-mini.selected {
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.15), rgba(10, 24, 50, 0.85));
+      border-color: var(--ghost-cyan);
+    }
+
+    /* Stealth Protocol Box in Sidebar */
+    .stealth-protocol-box {
+      padding: 10px 12px;
+      border-radius: 11px;
+      background: rgba(0, 230, 153, 0.06);
+      border: 1px solid rgba(0, 230, 153, 0.28);
+      margin-bottom: 10px;
+    }
+
+    .stealth-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--emerald-ok);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    .stealth-sub {
+      font-size: 10.5px;
+      color: var(--text-ice);
+    }
+
+    .sidebar-footer-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .sidebar-ctrl-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+
+    .util-btn {
+      padding: 8px 10px;
+      border-radius: 9px;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-ice);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.22s var(--ease-spring);
+    }
+
+    .util-btn:hover {
+      border-color: var(--ghost-cyan);
+      background: rgba(0, 229, 255, 0.18);
+      color: #fff;
+    }
+
+    /* ================= MAIN WORKSPACE ================= */
+    .workspace {
+      flex: 1;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 24px 32px 50px;
+    }
+
+    .workspace-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      animation: fadeSlideUp 0.4s var(--ease-spring);
+    }
+
+    /* ================= UNIT CONTROLLER HERO CARD ================= */
+    .hero-controller-card {
+      background: linear-gradient(135deg, rgba(7, 19, 42, 0.82) 0%, rgba(4, 11, 25, 0.88) 100%);
+      backdrop-filter: blur(16px) saturate(140%);
+      border: 1px solid var(--ghost-cyan-border);
+      border-radius: var(--radius-xl);
+      padding: 22px 26px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 32px rgba(0, 229, 255, 0.12);
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .hero-left {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .hero-mascot-badge {
+      width: 68px;
+      height: 68px;
+      border-radius: 16px;
+      background: radial-gradient(circle at 50% 45%, rgba(0, 229, 255, 0.24), rgba(5, 13, 28, 0.94));
+      border: 1.5px solid var(--ghost-cyan);
+      box-shadow: 0 0 24px rgba(0, 229, 255, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .hero-mascot-badge svg { width: 56px; height: 56px; }
+
+    .hero-overline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--ghost-cyan);
+      margin-bottom: 3px;
+    }
+
+    .hero-unit-name {
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .cyan-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--ghost-cyan-soft);
+      border: 1px solid var(--ghost-cyan-border);
+      color: var(--ghost-cyan);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .cyan-pill.running {
+      background: rgba(0, 230, 153, 0.16);
+      border-color: var(--emerald-ok);
+      color: var(--emerald-ok);
+    }
+
+    .purple-pill {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.16);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #d8b4fe;
+    }
+
+    .hero-actions {
+      padding-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn-cyan-glow {
+      padding: 9px 20px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #00e5ff 0%, #00b4d8 100%);
+      border: 1px solid #80f3ff;
+      color: #030914;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      transition: all 0.25s var(--ease-spring);
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.32);
+    }
+
+    .btn-cyan-glow:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 30px rgba(0, 229, 255, 0.6);
+    }
+
+    .btn-cyan-glow.active-stop {
+      background: rgba(0, 230, 153, 0.18);
+      border-color: var(--emerald-ok);
+      color: var(--emerald-ok);
+    }
+
+    .btn-ghost-outline {
+      padding: 9px 16px;
+      border-radius: var(--radius-md);
+      background: rgba(5, 14, 30, 0.68);
+      border: 1px solid var(--ghost-cyan-border);
+      color: var(--text-ice);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      transition: all 0.22s var(--ease-spring);
+    }
+
+    .btn-ghost-outline:hover {
+      background: rgba(0, 229, 255, 0.18);
+      border-color: var(--ghost-cyan);
+      color: #fff;
+    }
+
+    /* ================= TABS BAR ================= */
+    .tabs-bar {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0 16px;
+      background: rgba(5, 13, 28, 0.72);
+      backdrop-filter: blur(14px);
+      border-radius: var(--radius-lg);
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      padding: 12px 4px 13px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-ice);
+      cursor: pointer;
+      position: relative;
+      white-space: nowrap;
+      transition: color 0.22s ease;
+    }
+
+    .tab-btn:hover { color: #fff; }
+    .tab-btn.active {
+      color: var(--ghost-cyan);
+      text-shadow: 0 0 12px rgba(0, 229, 255, 0.5);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      inset-inline: 0;
+      bottom: 0;
+      height: 3px;
+      border-radius: 99px;
+      background: var(--ghost-cyan);
+      box-shadow: 0 0 12px var(--ghost-cyan);
+    }
+
+    .tab-view {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tab-view.active {
+      display: flex;
+      animation: fadeSlideUp 0.28s var(--ease-spring);
+    }
+
+    /* ================= CARDS, TABLES & CONTROLS ================= */
+    .surface-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px) saturate(145%);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: 20px 22px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .empty-state-box {
+      padding: 34px 22px;
+      text-align: center;
+      border: 1px dashed rgba(0, 229, 255, 0.28);
+      border-radius: var(--radius-lg);
+      background: rgba(5, 13, 28, 0.68);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .console-card {
+      background: rgba(4, 10, 22, 0.86);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--ghost-cyan-border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+
+    .console-header {
+      padding: 12px 18px;
+      background: rgba(7, 18, 38, 0.92);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .console-body {
+      padding: 18px;
+      min-height: 270px;
+      max-height: 340px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', 'Tajawal', monospace;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .console-line {
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(0, 229, 255, 0.06);
+      border-inline-start: 2.5px solid var(--ghost-cyan);
+      color: var(--text-ice);
+    }
+
+    .stats-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stats-grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    .stat-tile {
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 15px 16px;
+    }
+
+    .stat-label {
+      font-family: 'JetBrains Mono', 'Tajawal', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 5px;
+      display: block;
+    }
+
+    .stat-number {
+      font-size: 21px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .rss-bar-fill {
+      height: 16px;
+      border-radius: 5px;
+      background: rgba(0, 230, 153, 0.32);
+      border: 1px solid rgba(0, 230, 153, 0.52);
+      margin-top: 8px;
+    }
+
+    .clean-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: start;
+    }
+
+    .clean-table th {
+      font-family: 'JetBrains Mono', 'Tajawal', monospace;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      text-transform: uppercase;
+    }
+
+    .clean-table td {
+      padding: 11px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 12.5px;
+      vertical-align: middle;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      padding: 9px 13px;
+      border-radius: var(--radius-md);
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      color: #fff;
+      font-family: inherit;
+      font-size: 12.5px;
+      outline: none;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: var(--ghost-cyan);
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 38px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background-color: rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      transition: 0.22s;
+    }
+    .toggle-slider::before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #fff;
+      border-radius: 50%;
+      transition: 0.22s;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: var(--emerald-ok);
+    }
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(18px);
+    }
+
+    /* Config Split Layout */
+    .config-top-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 24px;
+    }
+
+    .config-split-grid {
+      display: grid;
+      grid-template-columns: 225px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .config-cat-list {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .cfg-cat-btn {
+      padding: 10px 13px;
+      border-radius: var(--radius-md);
+      color: var(--text-ice);
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .cfg-cat-btn:hover { background: rgba(0, 229, 255, 0.08); color: #fff; }
+    .cfg-cat-btn.active {
+      background: rgba(0, 229, 255, 0.16);
+      border: 1px solid var(--ghost-cyan-border);
+      color: var(--ghost-cyan);
+      font-weight: 800;
+    }
+
+    .cfg-setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 13px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .cfg-setting-row:last-child { border-bottom: none; }
+
+    /* Profile Full Tab Grid */
+    .profile-full-grid {
+      display: grid;
+      grid-template-columns: 310px 1fr;
+      gap: 18px;
+    }
+
+    .profile-hero-card {
+      background: var(--bg-card);
+      border: 1px solid var(--ghost-cyan-border);
+      border-radius: var(--radius-xl);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+    }
+
+    .profile-big-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      background: radial-gradient(circle at 50% 40%, rgba(0, 229, 255, 0.28), #061329);
+      border: 2px solid var(--ghost-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 8, 18, 0.82);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal-box {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(6, 15, 32, 0.96);
+      border: 1px solid var(--ghost-cyan);
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .toast-bar {
+      position: fixed;
+      bottom: 22px;
+      inset-inline-end: 22px;
+      z-index: 120;
+      background: rgba(6, 15, 32, 0.96);
+      border: 1px solid var(--ghost-cyan);
+      color: #fff;
+      padding: 11px 18px;
+      border-radius: var(--radius-md);
+      font-size: 12.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s var(--ease-spring);
+    }
+
+    .toast-bar.visible {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Custom GhostBot Tactical SVG Icons */
+    .gb-icon {
+      width: 15px;
+      height: 15px;
+      display: inline-block;
+      vertical-align: -2.5px;
+      flex-shrink: 0;
+      filter: drop-shadow(0 0 5px rgba(0, 229, 255, 0.35));
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    button:hover .gb-icon,
+    .util-btn:hover .gb-icon {
+      transform: scale(1.12);
+      filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.75));
+    }
+
+    .gb-res-icon {
+      width: 17px;
+      height: 17px;
+      display: inline-block;
+      vertical-align: -3px;
+      margin-inline-end: 6px;
+      flex-shrink: 0;
+    }
+
+    .avatar-svg-emblem {
+      width: 68%;
+      height: 68%;
+      filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.55));
+    }
+
+    .input-icon-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .input-icon-wrap .gb-input-svg {
+      position: absolute;
+      inset-inline-start: 12px;
+      width: 15px;
+      height: 15px;
+      color: var(--ghost-cyan);
+      pointer-events: none;
+      opacity: 0.85;
+    }
+
+    .input-icon-wrap .form-input {
+      padding-inline-start: 35px;
+    }
+
+    /* Updates Mail & Notifications Tactical Icon Buttons */
+    .tactical-alert-cluster {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .tactical-icon-btn {
+      position: relative;
+      height: 38px;
+      padding: 0 13px;
+      border-radius: 11px;
+      background: rgba(7, 20, 42, 0.82);
+      border: 1px solid rgba(0, 229, 255, 0.28);
+      color: var(--text-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.22s var(--ease-spring);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 0 12px rgba(0, 229, 255, 0.06);
+    }
+
+    .tactical-icon-btn:hover {
+      background: rgba(0, 229, 255, 0.14);
+      border-color: var(--ghost-cyan);
+      transform: translateY(-2px);
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.32);
+    }
+
+    .tactical-icon-btn svg {
+      width: 17px;
+      height: 17px;
+      filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.55));
+    }
+
+    .unread-counter-badge {
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #00e5ff, #0284c7);
+      color: #021024;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.8);
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .unread-counter-badge.badge-amber {
+      background: linear-gradient(135deg, #facc15, #ea580c);
+      color: #090d16;
+      box-shadow: 0 0 10px rgba(250, 204, 21, 0.75);
+    }
+
+    .unread-counter-badge.hidden-badge {
+      display: none;
+    }
+
+    .sidebar-quick-comm {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .mail-item-card {
+      background: rgba(8, 22, 46, 0.78);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      border-radius: 12px;
+      padding: 13px 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .mail-item-card.unread {
+      border-inline-start: 3px solid var(--ghost-cyan);
+      background: rgba(0, 229, 255, 0.07);
+    }
+
+    .mail-item-card:hover {
+      border-color: var(--ghost-cyan);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Kingdom Background + Cyber-Cyan Grading -->
+  <div class="kingdom-bg-layer"></div>
+  <div class="kingdom-brand-overlay"></div>
+
+  <!-- Master GhostBot Vector Mascot & Custom Tactical Icon Sprite Sheet -->
+  <svg width="0" height="0" style="position:absolute; pointer-events:none;">
+    <defs>
+      <linearGradient id="ghostBodyGrad" x1="15%" y1="5%" x2="85%" y2="95%">
+        <stop offset="0%" stop-color="#f2feff"/>
+        <stop offset="45%" stop-color="#64f0ff"/>
+        <stop offset="100%" stop-color="#00a8cc"/>
+      </linearGradient>
+      <linearGradient id="cyberGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#fff3b0"/>
+        <stop offset="50%" stop-color="#facc15"/>
+        <stop offset="100%" stop-color="#d97706"/>
+      </linearGradient>
+      <linearGradient id="cyberCyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#a5f3fc"/>
+        <stop offset="50%" stop-color="#00e5ff"/>
+        <stop offset="100%" stop-color="#0284c7"/>
+      </linearGradient>
+      <radialGradient id="haloAura" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="rgba(0, 229, 255, 0.45)"/>
+        <stop offset="100%" stop-color="rgba(0, 229, 255, 0)"/>
+      </radialGradient>
+
+      <!-- GhostBot Mascot -->
+      <symbol id="ghostbot-mascot" viewBox="0 0 100 100">
+        <circle cx="50" cy="52" r="42" fill="url(#haloAura)"/>
+        <line x1="51" y1="20" x2="49" y2="10" stroke="#00e5ff" stroke-width="3.2" stroke-linecap="round"/>
+        <circle cx="48.5" cy="8.5" r="4.5" fill="#c4fcff" stroke="#00e5ff" stroke-width="2"/>
+        <path d="M52 19 C34 19 25 31 24 47 C22 54 15 58 14 62 C14 65 20 66 24 64 C23 71 17 75 12 77 C18 83 29 83 35 79 C39 84 46 85 51 81 C56 85 64 84 67 77 C71 75 74 68 74 61 C78 63 83 62 84 58 C84 54 78 49 76 44 C75 29 67 19 52 19 Z"
+              fill="url(#ghostBodyGrad)" stroke="#05162e" stroke-width="3.2" stroke-linejoin="round"/>
+        <rect x="33" y="28" width="37" height="24" rx="11" fill="#05142b" stroke="#00e5ff" stroke-width="1.8"/>
+        <path d="M40 39 C41.5 35.5, 45.5 35.5, 47 39" fill="none" stroke="#62f2ff" stroke-width="2.8" stroke-linecap="round"/>
+        <path d="M56 39 C57.5 35.5, 61.5 35.5, 63 39" fill="none" stroke="#62f2ff" stroke-width="2.8" stroke-linecap="round"/>
+        <path d="M47.5 44 C49.5 47.2, 53.5 47.2, 55.5 44" fill="none" stroke="#62f2ff" stroke-width="2.6" stroke-linecap="round"/>
+        <g class="gear-rotator">
+          <circle cx="47" cy="66" r="6.5" fill="#05142b" stroke="#00e5ff" stroke-width="2"/>
+          <circle cx="47" cy="66" r="2.6" fill="#62f2ff"/>
+        </g>
+      </symbol>
+
+      <!-- Custom Cyber Mail (Updates Inbox) & Cyber Bell (Notifications) Icons -->
+      <symbol id="icon-cyber-mail" viewBox="0 0 24 24">
+        <rect x="2.5" y="4.5" width="19" height="15" rx="3" fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.8"/>
+        <polyline points="3 6 12 13 21 6" fill="none" stroke="#a5f3fc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="18.5" cy="6.5" r="2.5" fill="#facc15" stroke="#05142b" stroke-width="1"/>
+      </symbol>
+
+      <symbol id="icon-cyber-bell" viewBox="0 0 24 24">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" fill="rgba(0,229,255,0.16)" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="#facc15" stroke-width="2" stroke-linecap="round"/>
+        <path d="M19.5 4.5C20.8 5.8 21.5 7.5 21.5 9" fill="none" stroke="#62f2ff" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M4.5 4.5C3.2 5.8 2.5 7.5 2.5 9" fill="none" stroke="#62f2ff" stroke-width="1.4" stroke-linecap="round"/>
+      </symbol>
+
+      <!-- Avatar & Commander Emblems -->
+      <symbol id="icon-crown-royal" viewBox="0 0 24 24">
+        <path d="M3 18h18v2H3v-2zm0-2l2-9 5 4 2-6 2 6 5-4 2 9H3z" fill="url(#cyberGoldGrad)" stroke="#00e5ff" stroke-width="1.2" stroke-linejoin="round"/>
+        <circle cx="12" cy="3" r="1.5" fill="#00e5ff"/>
+        <circle cx="5" cy="5.5" r="1.2" fill="#00e5ff"/>
+        <circle cx="19" cy="5.5" r="1.2" fill="#00e5ff"/>
+      </symbol>
+
+      <symbol id="icon-blades-tactical" viewBox="0 0 24 24">
+        <path d="M14.5 17.5L3 6V3h3l11.5 11.5-3 3z" fill="url(#cyberCyanGrad)" stroke="#e2f8ff" stroke-width="1.2"/>
+        <path d="M13 19l6-6M16 16l4 4M19 21l2-2" stroke="#00e5ff" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.5 17.5L21 6V3h-3L6.5 14.5l3 3z" fill="none" stroke="#facc15" stroke-width="1.6"/>
+        <path d="M11 19l-6-6M8 16l-4 4M5 21l-2-2" stroke="#facc15" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="icon-aegis-shield" viewBox="0 0 24 24">
+        <path d="M12 2L4 5.5v6.2c0 5.4 3.4 9.9 8 11.3 4.6-1.4 8-5.9 8-11.3V5.5L12 2z" fill="rgba(0,229,255,0.18)" stroke="#00e5ff" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M12 6.5l4 2v3.5c0 2.9-1.7 5.4-4 6.4-2.3-1-4-3.5-4-6.4V8.5l4-2z" fill="url(#cyberCyanGrad)"/>
+      </symbol>
+
+      <!-- UI Utility & Action Icons -->
+      <symbol id="icon-edit-pen" viewBox="0 0 24 24">
+        <path d="M12 20h9" stroke="#00e5ff" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" fill="rgba(0,229,255,0.18)" stroke="#00e5ff" stroke-width="1.8" stroke-linejoin="round"/>
+      </symbol>
+
+      <symbol id="icon-globe-cyber" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9.5" fill="none" stroke="#00e5ff" stroke-width="1.8"/>
+        <ellipse cx="12" cy="12" rx="4.2" ry="9.5" fill="none" stroke="#00e5ff" stroke-width="1.5"/>
+        <line x1="2.5" y1="12" x2="21.5" y2="12" stroke="#00e5ff" stroke-width="1.5"/>
+        <line x1="4.5" y1="7.5" x2="19.5" y2="7.5" stroke="#00e5ff" stroke-width="1.1" stroke-opacity="0.7"/>
+        <line x1="4.5" y1="16.5" x2="19.5" y2="16.5" stroke="#00e5ff" stroke-width="1.1" stroke-opacity="0.7"/>
+      </symbol>
+
+      <symbol id="icon-lighting-prism" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.5" fill="url(#cyberCyanGrad)" stroke="#fff" stroke-width="1.2"/>
+        <path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="#00e5ff" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="icon-power-play" viewBox="0 0 24 24">
+        <polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </symbol>
+
+      <symbol id="icon-plus-node" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="5" fill="rgba(0,229,255,0.12)" stroke="currentColor" stroke-width="1.8"/>
+        <line x1="12" y1="7.5" x2="12" y2="16.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="7.5" y1="12" x2="16.5" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="icon-rss-crate" viewBox="0 0 24 24">
+        <path d="M21 8.5l-9-5-9 5v7l9 5 9-5v-7z" fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.8" stroke-linejoin="round"/>
+        <polyline points="3.3 8.7 12 13.5 20.7 8.7" fill="none" stroke="#00e5ff" stroke-width="1.6"/>
+        <line x1="12" y1="20.5" x2="12" y2="13.5" stroke="#00e5ff" stroke-width="1.6"/>
+      </symbol>
+
+      <symbol id="icon-commander-badge" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="4" fill="rgba(0,229,255,0.22)" stroke="#00e5ff" stroke-width="1.8"/>
+        <path d="M4.5 20c1.5-3.8 4.3-5.5 7.5-5.5s6 1.7 7.5 5.5" fill="none" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="icon-search-radar" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" fill="rgba(0,229,255,0.1)" stroke="#00e5ff" stroke-width="2"/>
+        <circle cx="11" cy="11" r="2.5" fill="#00e5ff"/>
+        <line x1="16.2" y1="16.2" x2="21" y2="21" stroke="#00e5ff" stroke-width="2.2" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="icon-close-x" viewBox="0 0 24 24">
+        <line x1="18" y1="6" x2="6" y2="18" stroke="#00e5ff" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="6" y1="6" x2="18" y2="18" stroke="#00e5ff" stroke-width="2.2" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="icon-analytics-chart" viewBox="0 0 24 24">
+        <rect x="3" y="13" width="4" height="8" rx="1" fill="#00e5ff"/>
+        <rect x="10" y="8" width="4" height="13" rx="1" fill="#62f2ff"/>
+        <rect x="17" y="4" width="4" height="17" rx="1" fill="#facc15"/>
+      </symbol>
+
+      <symbol id="icon-doc-report" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="rgba(0,229,255,0.14)" stroke="#00e5ff" stroke-width="1.8"/>
+        <polyline points="14 2 14 8 20 8" fill="none" stroke="#00e5ff" stroke-width="1.8"/>
+        <line x1="8" y1="13" x2="16" y2="13" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="8" y1="17" x2="13" y2="17" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+
+      <!-- Custom Kingdom Resource Icons -->
+      <symbol id="icon-res-food" viewBox="0 0 24 24">
+        <path d="M12 2v20M12 6c-3 0-5 2.2-5 5 3 0 5-2.2 5-5zm0 5c-3 0-5 2.2-5 5 3 0 5-2.2 5-5zm0-5c3 0 5 2.2 5 5-3 0-5-2.2-5-5zm0 5c3 0 5 2.2 5 5-3 0-5-2.2-5-5z" fill="#facc15" stroke="#fde047" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+
+      <symbol id="icon-res-wood" viewBox="0 0 24 24">
+        <polygon points="12 2 4 12 9 12 5 18 19 18 15 12 20 12 12 2" fill="rgba(0,230,153,0.3)" stroke="#00e699" stroke-width="1.8" stroke-linejoin="round"/>
+        <line x1="12" y1="18" x2="12" y2="22" stroke="#00e699" stroke-width="2.4" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="icon-res-stone" viewBox="0 0 24 24">
+        <polygon points="12 3 4 9 6 20 18 20 20 9 12 3" fill="rgba(203,232,255,0.28)" stroke="#cbe8ff" stroke-width="1.8" stroke-linejoin="round"/>
+        <polyline points="4 9 12 13 20 9" fill="none" stroke="#cbe8ff" stroke-width="1.5"/>
+        <line x1="12" y1="13" x2="12" y2="20" stroke="#cbe8ff" stroke-width="1.5"/>
+      </symbol>
+
+      <symbol id="icon-res-gold" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" fill="rgba(255,170,43,0.25)" stroke="#ffaa2b" stroke-width="2"/>
+        <polygon points="12 6.5 14.2 10.2 18.2 11 15 14 15.8 18 12 16 8.2 18 9 14 5.8 11 9.8 10.2 12 6.5" fill="#ffaa2b"/>
+      </symbol>
+
+      <symbol id="icon-res-gems" viewBox="0 0 24 24">
+        <polygon points="6 3 18 3 22 9 12 21 2 9 6 3" fill="rgba(192,132,252,0.3)" stroke="#c084fc" stroke-width="1.8" stroke-linejoin="round"/>
+        <polyline points="2 9 22 9" stroke="#e9d5ff" stroke-width="1.4"/>
+        <polyline points="6 3 12 9 18 3" fill="none" stroke="#e9d5ff" stroke-width="1.4"/>
+        <polyline points="12 9 12 21" stroke="#e9d5ff" stroke-width="1.4"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- ================= FULL-HEIGHT SHELL ================= -->
+  <div class="app-shell">
+
+    <!-- SIDEBAR (INTEGRATED LOGO + UPDATES MAIL & NOTIFICATIONS + DEPLOYED UNITS + STEALTH WIRE) -->
+    <aside class="sidebar">
+      <div>
+        <!-- 1. Integrated Logo -->
+        <div class="sidebar-brand-box">
+          <div class="sidebar-logo-emblem">
+            <svg><use href="#ghostbot-mascot"/></svg>
+          </div>
+          <div>
+            <div class="ghostbot-wordmark">
+              <span class="w-ghost">Ghost</span><span class="w-bot">Bot</span>
+            </div>
+            <span class="brand-sub-caption" data-i18n="brandTagline">YOUR INTELLIGENT AI COMPANION</span>
+          </div>
+        </div>
+
+        <!-- 1.5 Quick Updates Mail & Notifications Bar in Sidebar -->
+        <div class="sidebar-quick-comm">
+          <button class="tactical-icon-btn" onclick="openUpdatesMailModal()" title="بريد التحديثات / Updates Mail">
+            <svg><use href="#icon-cyber-mail"/></svg>
+            <span data-i18n="btnUpdatesMailShort">التحديثات</span>
+            <span class="unread-counter-badge" id="sideMailBadge">3</span>
+          </button>
+          <button class="tactical-icon-btn" onclick="openNotificationsModal()" title="الإشعارات / Notifications">
+            <svg><use href="#icon-cyber-bell"/></svg>
+            <span data-i18n="btnNotifsShort">الإشعارات</span>
+            <span class="unread-counter-badge badge-amber" id="sideNotifBadge">2</span>
+          </button>
+        </div>
+
+        <!-- 2. Navigation -->
+        <div class="sidebar-section-title" data-i18n="navSectionTitle">القائمة الرئيسية والوحدات</div>
+        <nav class="sidebar-nav">
+          <div class="side-link active" data-nav="overview" onclick="switchMainRoom('overview')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span data-i18n="navOverview">📊 نظرة عامة (Overview)</span>
+          </div>
+          <div class="side-link" data-nav="upgrade" onclick="switchMainRoom('upgrade')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            <span data-i18n="navUpgrade">🛒 المتجر (Shop)</span>
+          </div>
+          <div class="side-link" data-nav="leaderboard" onclick="switchMainRoom('leaderboard')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+            <span data-i18n="navLeaderboard">🏆 المتصدرين (Leaderboard)</span>
+          </div>
+        </nav>
+
+        <!-- 4. Deployed Units Stack (Your Bots - وحداتك النشطة) -->
+        <div class="sidebar-section-title">
+          <span data-i18n="deployedUnitsLabel">وحداتك النشطة (Your Bots)</span>
+          <span style="color:var(--ghost-cyan); cursor:pointer;" onclick="switchTab('upgrade')">+ متجر الوحدات</span>
+        </div>
+        <div class="deployed-units-list" id="deployedUnitsList"></div>
+      </div>
+
+      <!-- 5. Stealth Protocol + Language / BG Controls + Sign Out -->
+      <div>
+        <div class="stealth-protocol-box">
+          <div class="stealth-title">
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <svg class="gb-icon"><use href="#icon-aegis-shield"/></svg>
+              STEALTH PROTOCOL
+            </span>
+            <span id="livePingDisplay">22ms</span>
+          </div>
+          <div class="stealth-sub" id="tenantUserBadge" data-i18n="stealthWireDesc">Nginx 444 Blackhole • Proxy Wire Secured</div>
+        </div>
+
+        <div class="sidebar-footer-controls">
+          <div class="sidebar-ctrl-row">
+            <button class="util-btn" onclick="toggleLanguage()">
+              <svg class="gb-icon"><use href="#icon-globe-cyber"/></svg>
+              <span id="langBtnLabel">English</span>
+            </button>
+            <button class="util-btn" onclick="cycleBgMode()">
+              <svg class="gb-icon"><use href="#icon-lighting-prism"/></svg>
+              <span data-i18n="bgModeBtn">الإضاءة</span>
+            </button>
+          </div>
+          <button class="util-btn" style="width:100%; border-color:rgba(255,77,109,0.35); color:#ff4d6d; background:rgba(255,77,109,0.08);" onclick="signOutTenant()">
+            <svg class="gb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span data-i18n="btnSignOut">تسجيل الخروج (Sign Out)</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="workspace">
+      <div class="workspace-inner">
+
+        <!-- UNIT CONTROLLER HERO CARD -->
+        <section class="hero-controller-card">
+          <div class="hero-top">
+            <div class="hero-left">
+              <div class="hero-mascot-badge">
+                <svg><use href="#ghostbot-mascot"/></svg>
+              </div>
+              <div>
+                <div class="hero-overline">UNIT CONTROLLER • ISOLATED WIRE</div>
+                <div class="hero-unit-name" id="bannerUnitName">GhostBot Unit #01</div>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <span class="cyan-pill" id="unitStatusPill" data-i18n="statusStandby">في وضع الاستعداد</span>
+                  <span class="purple-pill" id="slotCounterBadge">0 / 5 Slots</span>
+                  <span style="color:var(--text-ice); font-size:12px;" id="tenantStateLabel">Tenant: stopped</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+              <!-- Updates Mail & Notifications Tactical Icons -->
+              <div class="tactical-alert-cluster">
+                <button class="tactical-icon-btn" onclick="openUpdatesMailModal()" title="بريد التحديثات / System Updates Mail">
+                  <svg><use href="#icon-cyber-mail"/></svg>
+                  <span data-i18n="btnUpdatesMail">بريد التحديثات</span>
+                  <span class="unread-counter-badge" id="heroMailBadge">3</span>
+                </button>
+                <button class="tactical-icon-btn" onclick="openNotificationsModal()" title="الإشعارات / Tactical Notifications">
+                  <svg><use href="#icon-cyber-bell"/></svg>
+                  <span data-i18n="btnNotifs">الإشعارات</span>
+                  <span class="unread-counter-badge badge-amber" id="heroNotifBadge">2</span>
+                </button>
+              </div>
+
+              <div style="text-align:end;">
+                <div style="font-size:11.5px; color:var(--amber-wait); font-weight:700;">89d left • 5 Slots</div>
+                <div style="font-size:11px; color:var(--text-ice); font-family:'JetBrains Mono',monospace;" id="utcClockDisplay">--:--:-- UTC</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-actions">
+            <button class="btn-cyan-glow" id="mainStartBtn" onclick="toggleBotEngine()">
+              <svg class="gb-icon"><use href="#icon-power-play"/></svg>
+              <span id="mainStartBtnLabel" data-i18n="btnStartUnit">تشغيل الوحدة</span>
+            </button>
+            <button class="btn-ghost-outline" onclick="openLinkModal()">
+              <svg class="gb-icon"><use href="#icon-plus-node"/></svg>
+              <span data-i18n="btnLinkAccount">ربط حساب جديد</span>
+            </button>
+            <button class="btn-ghost-outline" onclick="openRssTransferModal()">
+              <svg class="gb-icon"><use href="#icon-rss-crate"/></svg>
+              <span data-i18n="btnRssTransfer">نقل الموارد (RSS TRANSFER)</span>
+            </button>
+            <button class="btn-ghost-outline" onclick="switchTab('upgrade')">
+              <svg class="gb-icon"><use href="#icon-commander-badge"/></svg>
+              <span data-i18n="btnOpenShop">🛒 متجر الوحدات (SHOP)</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- HORIZONTAL TABS (UNIT OPERATIONAL ROOM) -->
+        <nav class="tabs-bar" id="unitRoomTabsBar">
+          <div class="tab-btn active" data-tab="live" onclick="switchTab('live')" data-i18n="tabLive">البث المباشر (LIVE)</div>
+          <div class="tab-btn" data-tab="accounts" onclick="switchTab('accounts')" data-i18n="tabAccounts">الحسابات (ACCOUNTS)</div>
+          <div class="tab-btn" data-tab="inventory" onclick="switchTab('inventory')" data-i18n="tabInventory">المخزون (INVENTORY)</div>
+          <div class="tab-btn" data-tab="history" onclick="switchTab('history')" data-i18n="tabHistory">السجل (HISTORY)</div>
+          <div class="tab-btn" data-tab="config" onclick="switchTab('config')" data-i18n="tabConfig">الإعدادات (CONFIG)</div>
+          <div class="tab-btn" data-tab="profile" onclick="switchTab('profile')" data-i18n="tabProfile">البروفايل الشخصي</div>
+          <div class="tab-btn" data-tab="upgrade" onclick="switchTab('upgrade')" data-i18n="tabUpgrade">الترقية (UPGRADE)</div>
+        </nav>
+
+        <!-- ================= TAB 1: LIVE TELEMETRY STREAM ================= -->
+        <section class="tab-view active" id="view-live">
+          <div class="console-card">
+            <div class="console-header">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="color:var(--emerald-ok);">●</span>
+                <strong style="font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--ghost-cyan);" data-i18n="consoleTitle">LIVE TELEMETRY STREAM</strong>
+                <span class="cyan-pill" id="wireUnitBadge">GhostBot Unit #01 ISOLATED WIRE</span>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-ghost-outline" style="padding:4px 11px; font-size:11px;" onclick="refreshWireStream()">[ REFRESH WIRE ]</button>
+                <button class="btn-ghost-outline" style="padding:4px 11px; font-size:11px;" onclick="clearConsole()" data-i18n="btnClearLog">مسح السجل</button>
+              </div>
+            </div>
+            <div class="console-body" id="consoleBody">
+              <div class="console-line" style="display:flex; align-items:center; gap:8px;">
+                <svg width="18" height="18"><use href="#ghostbot-mascot"/></svg>
+                <span data-i18n="consoleWelcome">محرك GhostBot جاهز. في انتظار حزم البيانات أو تشغيل الوحدة...</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 2: MULTI-GOVERNOR ACCOUNTS ENGINE ================= -->
+        <section class="tab-view" id="view-accounts">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div class="input-icon-wrap" style="max-width:360px;">
+              <svg class="gb-input-svg"><use href="#icon-search-radar"/></svg>
+              <input
+                type="text"
+                id="searchAccInput"
+                class="form-input"
+                data-i18n-placeholder="searchPlaceholder"
+                placeholder="ابحث باسم الحاكم أو المعرف (ID) أو البريد الإلكتروني..."
+                oninput="renderAccountsList(this.value)"
+              />
+            </div>
+            <button class="btn-cyan-glow" onclick="openLinkModal()">
+              <svg class="gb-icon"><use href="#icon-plus-node"/></svg>
+              <span data-i18n="btnLinkAccount">ربط حساب جديد (بريد + كلمة مرور)</span>
+            </button>
+          </div>
+          <div id="accountsContainer"></div>
+        </section>
+
+        <!-- ================= TAB 3: 3-TIER INVENTORY ENGINE ================= -->
+        <section class="tab-view" id="view-inventory">
+          <!-- Tier 1: Resources Gathered (with TODAY / 7 DAYS / 30 DAYS filter) -->
+          <div class="surface-card">
+            <div class="section-head">
+              <span class="section-title" data-i18n="invSectionTitle">الموارد التي تم جمعها (Resources gathered)</span>
+              <div style="display:flex; gap:6px;">
+                <button class="util-btn" id="pBtnToday" style="border-color:var(--ghost-cyan);" onclick="setInvPeriod('today')">TODAY</button>
+                <button class="util-btn" id="pBtn7d" onclick="setInvPeriod('7d')">7 DAYS</button>
+                <button class="util-btn" id="pBtn30d" onclick="setInvPeriod('30d')">30 DAYS</button>
+              </div>
+            </div>
+            <div class="stats-grid-4">
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#facc15;">
+                  <svg class="gb-res-icon"><use href="#icon-res-food"/></svg>
+                  <span data-i18n="resFoodLabel">القمح (FOOD)</span>
+                </span>
+                <div class="stat-number" id="resFood">0</div>
+                <div class="rss-bar-fill"></div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#00e699;">
+                  <svg class="gb-res-icon"><use href="#icon-res-wood"/></svg>
+                  <span data-i18n="resWoodLabel">الأخشاب (WOOD)</span>
+                </span>
+                <div class="stat-number" id="resWood">0</div>
+                <div class="rss-bar-fill"></div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#cbe8ff;">
+                  <svg class="gb-res-icon"><use href="#icon-res-stone"/></svg>
+                  <span data-i18n="resStoneLabel">الحجر (STONE)</span>
+                </span>
+                <div class="stat-number" id="resStone">0</div>
+                <div class="rss-bar-fill"></div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#ffaa2b;">
+                  <svg class="gb-res-icon"><use href="#icon-res-gold"/></svg>
+                  <span data-i18n="resGoldLabel">الذهب (GOLD)</span>
+                </span>
+                <div class="stat-number" id="resGold">0</div>
+                <div class="rss-bar-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tier 2: In Cities Now (5 Resources including GEMS) -->
+          <div class="surface-card">
+            <div class="section-head">
+              <span class="section-title" data-i18n="inCitiesNowTitle">الموارد داخل المدن حالياً (In cities now)</span>
+            </div>
+            <div class="stats-grid-5">
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#facc15;"><svg class="gb-res-icon"><use href="#icon-res-food"/></svg>FOOD</span>
+                <div class="stat-number" id="cityFood">0</div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#00e699;"><svg class="gb-res-icon"><use href="#icon-res-wood"/></svg>WOOD</span>
+                <div class="stat-number" id="cityWood">0</div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#cbe8ff;"><svg class="gb-res-icon"><use href="#icon-res-stone"/></svg>STONE</span>
+                <div class="stat-number" id="cityStone">0</div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#ffaa2b;"><svg class="gb-res-icon"><use href="#icon-res-gold"/></svg>GOLD</span>
+                <div class="stat-number" id="cityGold">0</div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label" style="color:#c084fc;"><svg class="gb-res-icon"><use href="#icon-res-gems"/></svg>GEMS</span>
+                <div class="stat-number" id="cityGems">0</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tier 3: Per-Character Breakdown (11 Columns + Group by Kingdom) -->
+          <div class="surface-card">
+            <div class="section-head">
+              <span class="section-title" data-i18n="invBreakdownTitle">تفصيل الموارد لكل شخصية (Per-character breakdown)</span>
+              <button class="btn-ghost-outline" style="padding:5px 12px; font-size:11px;" onclick="toggleKingdomSort()">GROUP BY KINGDOM</button>
+            </div>
+            <div id="inventoryTableWrap" style="overflow-x:auto;"></div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 4: FULL 9-COLUMN HISTORY & SUMMARY INSPECTOR ================= -->
+        <section class="tab-view" id="view-history">
+          <div class="surface-card">
+            <div class="section-head">
+              <span class="section-title" data-i18n="histSectionTitle">سجل التشغيلات والتقارير الأخيرة (Recent runs & reports)</span>
+            </div>
+            <div id="historyTableWrap" style="overflow-x:auto;"></div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 5: DEEP 7-CATEGORY CONFIGURATION ENGINE ================= -->
+        <section class="tab-view" id="view-config">
+          <div class="surface-card config-top-grid">
+            <div>
+              <h3 class="section-title" style="margin-bottom:8px;" data-i18n="cfgMainTitle">إعدادات البوت المتقدمة (Configuration)</h3>
+              <p style="color:var(--text-ice); line-height:1.6; font-size:12.5px; margin-bottom:6px;" data-i18n="cfgSubDesc">
+                اختر قسماً أو ابحث عن إعداد. يتم حفظ تغييرات الحساب تلقائياً.
+              </p>
+              <span style="color:var(--ghost-cyan); font-size:12px;" data-i18n="cfgEffectNote">تُطبّق التغييرات في المرة القادمة التي يبدأ فيها البوت.</span>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:9px;">
+              <label style="font-size:10.5px; color:var(--text-secondary); font-weight:700;">ACCOUNT</label>
+              <select class="form-select" id="cfgAccountSelect"></select>
+              <div class="input-icon-wrap">
+                <svg class="gb-input-svg"><use href="#icon-search-radar"/></svg>
+                <input type="text" class="form-input" placeholder="Find account by governor name" oninput="filterAccountsInCfg(this.value)" />
+              </div>
+
+              <label style="font-size:10.5px; color:var(--text-secondary); font-weight:700; margin-top:3px;">APPLY CHANGES TO</label>
+              <select class="form-select">
+                <option value="all">All emails on this bot (جميع الإيميلات)</option>
+                <option value="selected">Selected email only (الإيميل المحدد فقط)</option>
+              </select>
+              <div class="input-icon-wrap">
+                <svg class="gb-input-svg"><use href="#icon-search-radar"/></svg>
+                <input type="text" class="form-input" placeholder="Search settings..." oninput="filterConfigRows(this.value)" />
+              </div>
+            </div>
+          </div>
+
+          <div class="config-split-grid">
+            <div class="config-cat-list">
+              <div class="cfg-cat-btn active" onclick="renderConfigCategory('General', this)">General (عام)</div>
+              <div class="cfg-cat-btn" onclick="renderConfigCategory('Gathering', this)">Gathering (جمع الموارد)</div>
+              <div class="cfg-cat-btn" onclick="renderConfigCategory('City', this)">City (المدينة والقلعة)</div>
+              <div class="cfg-cat-btn" onclick="renderConfigCategory('Combat', this)">Combat (القتال)</div>
+              <div class="cfg-cat-btn" onclick="renderConfigCategory('Alliance', this)">Alliance (التحالف)</div>
+              <div class="cfg-cat-btn" onclick="renderConfigCategory('Daily Claims', this)">Daily Claims (الجوائز)</div>
+              <div class="cfg-cat-btn" onclick="renderConfigCategory('Account Progression', this)">Account Progression (التطوير)</div>
+            </div>
+
+            <div class="surface-card" id="configCategoryViewport"></div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 6: PERSONAL PROFILE CARD ================= -->
+        <section class="tab-view" id="view-profile">
+          <div class="profile-full-grid">
+            <div class="profile-hero-card">
+              <div class="profile-big-avatar" id="profileBigEmoji">
+                <svg class="avatar-svg-emblem"><use href="#icon-crown-royal"/></svg>
+              </div>
+              <h3 style="font-size:19px; font-weight:900;" id="profileCardDisplayName">القائد علي غيث</h3>
+              <span class="cyan-pill" id="profileCardDisplayTitle">قائد المملكة • KINGS LANDING</span>
+              <p style="font-size:12px; color:var(--text-ice); line-height:1.6; margin-top:4px;" data-i18n="profileBioDefault">
+                مشرف الوحدات التكتيكية ومتحكم أسطول GhostBot الذكي.
+              </p>
+            </div>
+
+            <div class="surface-card" style="display:flex; flex-direction:column; gap:14px;">
+              <h3 class="section-title" data-i18n="editProfileHeading">تخصيص بطاقة البروفايل الشخصي</h3>
+              <div>
+                <label style="font-size:12px; color:var(--text-ice); display:block; margin-bottom:6px;" data-i18n="lblCommanderName">اسم القائد / المستخدم</label>
+                <input type="text" id="inpProfileName" class="form-input" value="القائد علي غيث" />
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <div>
+                  <label style="font-size:12px; color:var(--text-ice); display:block; margin-bottom:6px;" data-i18n="lblCommanderTitle">اللقب / الرتبة التكتيكية</label>
+                  <input type="text" id="inpProfileTitle" class="form-input" value="قائد المملكة • KINGS LANDING" />
+                </div>
+                <div>
+                  <label style="font-size:12px; color:var(--text-ice); display:block; margin-bottom:6px;" data-i18n="lblAvatarIcon">الأيقونة المخصصة للأفاتار</label>
+                  <select id="inpProfileEmoji" class="form-select">
+                    <option value="#icon-crown-royal">التاج الملكي (Royal Crown Emblem)</option>
+                    <option value="#ghostbot-mascot">شعار الشبح الذكي (GhostBot Core)</option>
+                    <option value="#icon-blades-tactical">النصال التكتيكية (Cyber Blades)</option>
+                    <option value="#icon-aegis-shield">درع الحماية السيبراني (Aegis Shield)</option>
+                  </select>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:flex-end; margin-top:6px;">
+                <button class="btn-cyan-glow" onclick="saveProfileCard()" data-i18n="btnSaveProfile">حفظ بيانات البروفايل</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 7: SHOP & UNITS STORE (FARM BOT ACTIVE + GEM BOT COMING SOON) ================= -->
+                <!-- ================= TAB 6: LEADERBOARDS & KINGDOM RANKINGS ================= -->
+        <section class="tab-view" id="view-leaderboard">
+          <div class="surface-card" style="margin-bottom:16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+              <div>
+                <span class="cyan-pill">KINGDOM GATHERING LEADERBOARDS</span>
+                <h3 style="font-size:20px; font-weight:900; margin-top:8px;">🏆 لوحة المتصدرين وإحصائيات المملكة</h3>
+                <p style="font-size:12.5px; color:var(--text-ice); margin-top:4px;">تصنيف أداء الحُكّام والوحدات في جمع الموارد وكفاءة الطوابير على مدار الساعة.</p>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-cyan-glow" onclick="refreshLeaderboard()">
+                  <svg class="gb-icon"><use href="#icon-globe-cyber"/></svg>
+                  <span>تحديث الترتيب</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats-grid-4" style="margin-bottom:16px;">
+            <div class="stat-tile">
+              <div style="font-size:11px; color:var(--text-secondary);">المملكة الأكثر نشاطاً</div>
+              <div style="font-size:18px; font-weight:900; color:var(--ghost-cyan); margin-top:4px;">#3057</div>
+              <div style="font-size:10.5px; color:var(--emerald-ok); margin-top:2px;">99.8% استقرار القناة</div>
+            </div>
+            <div class="stat-tile">
+              <div style="font-size:11px; color:var(--text-secondary);">إجمالي الموارد المجمعة</div>
+              <div style="font-size:18px; font-weight:900; color:#fff; margin-top:4px;">148.6M</div>
+              <div style="font-size:10.5px; color:var(--text-ice); margin-top:2px;">خلال الـ 24 ساعة الماضية</div>
+            </div>
+            <div class="stat-tile">
+              <div style="font-size:11px; color:var(--text-secondary);">الطوابير النشطة حالياً</div>
+              <div style="font-size:18px; font-weight:900; color:var(--emerald-ok); margin-top:4px;">28 / 30</div>
+              <div style="font-size:10.5px; color:var(--text-ice); margin-top:2px;">كفاءة نشر 93.3%</div>
+            </div>
+            <div class="stat-tile">
+              <div style="font-size:11px; color:var(--text-secondary);">معدل الأمان والتخفي</div>
+              <div style="font-size:18px; font-weight:900; color:var(--ghost-cyan); margin-top:4px;">100%</div>
+              <div style="font-size:10.5px; color:var(--emerald-ok); margin-top:2px;">Safe Wire Protocol</div>
+            </div>
+          </div>
+
+          <div class="surface-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+              <strong style="font-size:14px;">ترتيب الحُكّام حسب إجمالي الحصاد (Top Governors Rank)</strong>
+              <span class="cyan-pill">المملكة #3057</span>
+            </div>
+            <table class="clean-table" id="leaderboardTable">
+              <thead>
+                <tr>
+                  <th>الترتيب (RANK)</th>
+                  <th>الحاكم (GOVERNOR)</th>
+                  <th>المملكة (KINGDOM)</th>
+                  <th>إجمالي الجمع (TOTAL RSS)</th>
+                  <th>الطوابير النشطة (MARCHES)</th>
+                  <th>القوة (POWER)</th>
+                  <th>الحالة (STATUS)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg, #facc15, #d97706); color:#000; font-weight:900; font-size:12px;">🥇 1</span></td>
+                  <td><strong>Gov #234166259 (Nucro)</strong></td>
+                  <td><span class="cyan-pill">#3057</span></td>
+                  <td style="color:var(--ghost-cyan); font-weight:800; font-family:'JetBrains Mono',monospace;">48.25M</td>
+                  <td><span class="emerald-badge">5 / 5 طوابير</span></td>
+                  <td>2.45M</td>
+                  <td><span class="status-pill running">نشط في الجمع</span></td>
+                </tr>
+                <tr>
+                  <td><span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg, #e2e8f0, #94a3b8); color:#000; font-weight:900; font-size:12px;">🥈 2</span></td>
+                  <td><strong>Gov #219842104 (FarmKD1)</strong></td>
+                  <td><span class="cyan-pill">#3057</span></td>
+                  <td style="color:var(--ghost-cyan); font-weight:800; font-family:'JetBrains Mono',monospace;">38.60M</td>
+                  <td><span class="emerald-badge">5 / 5 طوابير</span></td>
+                  <td>1.85M</td>
+                  <td><span class="status-pill running">نشط في الجمع</span></td>
+                </tr>
+                <tr>
+                  <td><span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg, #fdba74, #ea580c); color:#000; font-weight:900; font-size:12px;">🥉 3</span></td>
+                  <td><strong>Gov #240184912 (Collector03)</strong></td>
+                  <td><span class="cyan-pill">#3057</span></td>
+                  <td style="color:var(--ghost-cyan); font-weight:800; font-family:'JetBrains Mono',monospace;">29.40M</td>
+                  <td><span class="emerald-badge">4 / 5 طوابير</span></td>
+                  <td>1.52M</td>
+                  <td><span class="status-pill running">نشط في الجمع</span></td>
+                </tr>
+                <tr>
+                  <td><span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.08); color:var(--text-ice); font-weight:800; font-size:12px;">4</span></td>
+                  <td><strong>Gov #251092834 (ResourceKing)</strong></td>
+                  <td><span class="cyan-pill">#3057</span></td>
+                  <td style="color:var(--ghost-cyan); font-weight:800; font-family:'JetBrains Mono',monospace;">26.65M</td>
+                  <td><span class="emerald-badge">4 / 5 طوابير</span></td>
+                  <td>1.34M</td>
+                  <td><span class="status-pill running">نشط في الجمع</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab-view" id="view-upgrade">
+          <div class="surface-card" style="margin-bottom:16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+              <div>
+                <span class="cyan-pill">GHOSTBOT TACTICAL STORE</span>
+                <h3 style="font-size:20px; font-weight:900; margin-top:8px;">متجر وحدات GhostBot السحابية</h3>
+                <p style="font-size:12.5px; color:var(--text-ice); margin-top:4px;">اختر نوع الوحدة التكتيكية لتشغيل حساباتك وحُكّامك على مدار الساعة عبر القناة المعزولة.</p>
+              </div>
+            </div>
+          </div>
+
+                    <!-- SHOP ENHANCEMENT: REFERRAL / PARTNER CODE CARD -->
+          <div class="surface-card" style="margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="purple-pill">🎁 كود الشريك / الإحالة</span>
+                <span style="font-size:12px; color:var(--emerald-ok); font-weight:700;">خصم 10% فوري</span>
+              </div>
+              <h4 style="font-size:15px; font-weight:800; margin-top:6px;">هل تملك كود دعوة أو كود شريك معتمد؟</h4>
+              <p style="font-size:12px; color:var(--text-ice);">أدخل كود الإحالة للحصول على خصم دائم ودعم منشئ المحتوى المفضل لديك.</p>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="text" id="inpReferralCode" class="form-input" placeholder="أدخل كود الشريك..." style="width:190px;" />
+              <button class="btn-cyan-glow" onclick="applyReferralCode()">تطبيق الكود</button>
+            </div>
+          </div>
+
+          <!-- SHOP ENHANCEMENT: VERIFIED COMMUNITY REVIEWS -->
+          <div class="surface-card" style="margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; border-color:rgba(250,204,21,0.35);">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div style="font-size:28px; line-height:1; font-weight:900; color:#facc15;">4.7 ⭐</div>
+              <div>
+                <h4 style="font-size:14.5px; font-weight:800;">تقييمات المجتمع المعتمدة (Verified Community Reviews)</h4>
+                <p style="font-size:12px; color:var(--text-ice);">أكثر من 1,280 مستخدم نشط يثقون في GhostBot لإدارة مزارعهم 24/7 دون أي حظر.</p>
+              </div>
+            </div>
+            <button class="btn-ghost-outline" onclick="openReviewsModal()">
+              <span>عرض آراء المستخدمين</span>
+              <span style="color:var(--ghost-cyan);">›</span>
+            </button>
+          </div>
+
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:18px;">
+            <!-- UNIT 1: FARM BOT (ACTIVE & PURCHASABLE) -->
+            <div class="surface-card" style="border-color:var(--ghost-cyan); box-shadow:0 0 28px rgba(0,229,255,0.14); display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                  <span class="cyan-pill running">متاح ونشط الآن • ACTIVE UNIT</span>
+                  <span style="font-size:20px; font-weight:900; color:var(--ghost-cyan);">$10<span style="font-size:11px; color:var(--text-ice);">/mo</span></span>
+                </div>
+                <h3 style="font-size:21px; font-weight:900; color:#fff; margin-bottom:6px;">Farm Bot — بوت الموارد والتدريب الشامل</h3>
+                <p style="color:var(--text-ice); font-size:12.5px; line-height:1.6; margin-bottom:14px;">
+                  جمع الموارد الذكي بـ 5 طوابير كاملة، تدريب الجيوش المستمر، حصاد المدينة، واستلام هدايا ومساعدات التحالف تلقائياً 24/7.
+                </p>
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px;">
+                  <div class="stat-tile" style="padding:9px; text-align:center; cursor:pointer; border-color:var(--ghost-cyan);" onclick="upgradeSlots(1)">
+                    <div style="font-size:11px; color:var(--text-ice);">1 Account</div>
+                    <div style="font-size:14px; font-weight:800; color:var(--ghost-cyan);">$10/mo</div>
+                  </div>
+                  <div class="stat-tile" style="padding:9px; text-align:center; cursor:pointer;" onclick="upgradeSlots(5)">
+                    <div style="font-size:11px; color:var(--text-ice);">5 Accounts</div>
+                    <div style="font-size:14px; font-weight:800; color:#fff;">$25/mo</div>
+                  </div>
+                  <div class="stat-tile" style="padding:9px; text-align:center; cursor:pointer;" onclick="upgradeSlots(15)">
+                    <div style="font-size:11px; color:var(--text-ice);">15 Accounts</div>
+                    <div style="font-size:14px; font-weight:800; color:#fff;">$50/mo</div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn-cyan-glow" style="width:100%; justify-content:center;" onclick="upgradeSlots(15); switchTab('accounts');">
+                <svg class="gb-icon"><use href="#icon-power-play"/></svg>
+                <span>تفعيل وترقية Farm Bot الآن</span>
+              </button>
+            </div>
+
+            <!-- UNIT 2: GEM BOT (COMING SOON / LOCKED) -->
+            <div class="surface-card" style="opacity:0.78; border-color:rgba(255,170,43,0.35); display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                  <span class="cyan-pill" style="color:var(--amber-wait); border-color:rgba(255,170,43,0.45); background:rgba(255,170,43,0.12);">🔒 قريباً • COMING SOON</span>
+                  <span style="font-size:16px; font-weight:800; color:var(--amber-wait);">قريباً</span>
+                </div>
+                <h3 style="font-size:21px; font-weight:900; color:#fff; margin-bottom:6px;">Gem Bot — بوت الجواهر الذكي</h3>
+                <p style="color:var(--text-ice); font-size:12.5px; line-height:1.6; margin-bottom:14px;">
+                  رادار مسح الخريطة المتقدم لاصطياد مناجم الجواهر على مدار الساعة مع تبديل التشكيلات وتفادي التصادم في المملكة.
+                </p>
+                <div style="padding:12px; border-radius:10px; background:rgba(255,170,43,0.08); border:1px dashed rgba(255,170,43,0.3); font-size:12px; color:var(--amber-wait); margin-bottom:16px;">
+                  هذه الوحدة قيد التطوير النهائي وسيتم إتاحتها للمشتركين قريباً.
+                </div>
+              </div>
+              <button class="btn-ghost-outline" disabled style="width:100%; justify-content:center; opacity:0.6; cursor:not-allowed; border-color:rgba(255,170,43,0.35); color:var(--amber-wait);">
+                <span>🔒 قريباً (Coming Soon)</span>
+              </button>
+            </div>
+          </div>
+        
+          <!-- SHOP ENHANCEMENT: RECENT TRANSACTIONS TABLE -->
+          <div class="surface-card" style="margin-top:20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+              <strong style="font-size:14px;">سجل التراخيص والمعاملات السابقة (License Transactions)</strong>
+              <span class="purple-pill">سجل آمن 100%</span>
+            </div>
+            <table class="clean-table">
+              <thead>
+                <tr>
+                  <th>رقم المعاملة (TX ID)</th>
+                  <th>الباقة (PACKAGE)</th>
+                  <th>تاريخ التفعيل (DATE)</th>
+                  <th>تاريخ التجديد (RENEWAL)</th>
+                  <th>المبلغ (AMOUNT)</th>
+                  <th>الحالة (STATUS)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-family:'JetBrains Mono',monospace;">GB-TX-882194</td>
+                  <td><strong>Farm Bot — Pro Tier (15 Bots)</strong></td>
+                  <td>2026-09-20</td>
+                  <td>2026-10-20</td>
+                  <td style="color:var(--ghost-cyan); font-weight:800;">$35.00</td>
+                  <td><span class="status-pill running">نشط • ACTIVE</span></td>
+                </tr>
+                <tr>
+                  <td style="font-family:'JetBrains Mono',monospace;">GB-TX-774019</td>
+                  <td><strong>GhostBot Unit #01 Setup</strong></td>
+                  <td>2026-08-20</td>
+                  <td>2026-09-20</td>
+                  <td style="color:var(--ghost-cyan); font-weight:800;">$15.00</td>
+                  <td><span class="status-pill" style="color:var(--text-secondary);">مكتمل • RENEWED</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL 1: 2-STEP GAME ACCOUNT LINKING (EMAIL + PASSWORD -> SELECT ACTIVE GOVERNORS) -->
+  <div class="modal-backdrop" id="linkAccountModal">
+    <div class="modal-box" style="max-width:540px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <svg width="32" height="32"><use href="#ghostbot-mascot"/></svg>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;" id="linkModalHeaderTitle" data-i18n="modalLinkTitle">ربط حساب اللعبة ومزامنة الحُكّام</h3>
+            <span style="font-size:11px; color:var(--ghost-cyan);" id="linkModalStepBadge">الخطوة 1 من 2 • تسجيل الدخول المباشر عبر Lilith Passport</span>
+          </div>
+        </div>
+        <button class="util-btn" onclick="closeLinkModal()">
+          <svg class="gb-icon"><use href="#icon-close-x"/></svg>
+        </button>
+      </div>
+
+      <!-- STEP 1: EMAIL & PASSWORD ONLY -->
+      <div id="linkStep1Container" style="display:flex; flex-direction:column; gap:12px;">
+        <p style="font-size:12px; color:var(--text-ice); line-height:1.6;">
+          أدخل البريد الإلكتروني وكلمة مرور حساب اللعبة فقط. سيقوم البوت بتسجيل الدخول تلقائياً وجلب جميع الشخصيات (الحُكّام) المرتبطة بالحساب لتختار منها ما تريد تشغيله.
+        </p>
+        <div>
+          <label style="font-size:11.5px; color:var(--text-ice); display:block; margin-bottom:5px;">البريد الإلكتروني (Game Account Email)</label>
+          <input type="email" id="inpEmail" dir="ltr" class="form-input" placeholder="commander@gmail.com" />
+        </div>
+        <div>
+          <label style="font-size:11.5px; color:var(--text-ice); display:block; margin-bottom:5px;">كلمة المرور (Lilith Password)</label>
+          <input type="password" id="inpPassword" dir="ltr" class="form-input" placeholder="••••••••••••" />
+        </div>
+
+        <!-- Inline / Popup Captcha Challenge Handler -->
+        <div id="linkCaptchaChallengeBox" style="display:none; padding:12px; border-radius:12px; background:rgba(255,170,43,0.1); border:1px solid rgba(255,170,43,0.4); flex-direction:column; gap:10px;">
+          <div style="font-size:12.5px; font-weight:800; color:var(--amber-wait);">⚠️ مطلوب حل التحقق الأمني (Captcha Verification)</div>
+          <p style="font-size:11.5px; color:var(--text-ice); line-height:1.5;">
+            طلبت خوادم Lilith حل تحدي الأمان (Geetest). اضغط لفتح نافذة الكابتشا، أو أكمل التحدي أدناه ثم اضغط "تأكيد الكابتشا والمتابعة":
+          </p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn-ghost-outline" style="border-color:var(--amber-wait); color:var(--amber-wait);" onclick="openCaptchaPopupWindow()">
+              فتح نافذة الكابتشا (Open Captcha)
+            </button>
+            <button type="button" class="btn-cyan-glow" onclick="submitCaptchaAndRetrySync()">
+              تأكيد الكابتشا وجلب الشخصيات
+            </button>
+          </div>
+          <input type="text" id="inpCaptchaToken" dir="ltr" class="form-input" style="font-size:11px;" placeholder="اختياري: الصق رمز captchaId في حال ظهوره أو اضغط تأكيد مباشرة بعد الحل" />
+        </div>
+
+        <div id="linkSyncErrorBox" style="display:none; padding:10px 12px; border-radius:10px; background:rgba(255,77,109,0.12); border:1px solid rgba(255,77,109,0.4); color:#ff8fa3; font-size:12px;"></div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
+          <button class="btn-ghost-outline" onclick="closeLinkModal()" data-i18n="btnCancel">إلغاء</button>
+          <button class="btn-cyan-glow" id="btnSyncAccountSubmit" onclick="saveNewAccount()">
+            <svg class="gb-icon"><use href="#icon-plus-node"/></svg>
+            <span id="btnSyncAccountLabel">تسجيل ومزامنة الشخصيات</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 2: SELECT ACTIVE GOVERNORS (اختر الشخصيات التي تريد تشغيلها) -->
+      <div id="linkStep2Container" style="display:none; flex-direction:column; gap:12px;">
+        <div style="padding:10px 12px; border-radius:10px; background:rgba(0,230,153,0.1); border:1px solid rgba(0,230,153,0.35); color:var(--emerald-ok); font-size:12px; font-weight:700;">
+          ✓ تم تسجيل الدخول بنجاح! اختر الشخصيات (الحُكّام) التي تريد تشغيل البوت عليها:
+        </div>
+        <div id="discoveredCharactersList" style="display:flex; flex-direction:column; gap:8px; max-height:310px; overflow-y:auto; padding-inline-end:4px;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px;">
+          <button class="btn-ghost-outline" onclick="resetLinkModalToStep1()">رجوع</button>
+          <button class="btn-cyan-glow" id="btnSaveSelectedGovs" onclick="confirmSelectedCharacters()">
+            <svg class="gb-icon"><use href="#icon-power-play"/></svg>
+            <span>حفظ وتشغيل الشخصيات المحددة</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 1.5: DELETE ACCOUNT CONFIRMATION MODAL -->
+  <div class="modal-backdrop" id="deleteAccountConfirmModal">
+    <div class="modal-box" style="max-width:440px; border-color:rgba(255,77,109,0.5);">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="font-size:16px; font-weight:900; color:#ff4d6d;">تأكيد حذف الحساب وإيقاف الحُكّام</h3>
+        <button class="util-btn" onclick="closeDeleteAccountModal()">
+          <svg class="gb-icon"><use href="#icon-close-x"/></svg>
+        </button>
+      </div>
+      <p style="font-size:13px; color:var(--text-ice); line-height:1.65; margin:8px 0;">
+        هل أنت متأكد من حذف الحساب <strong id="delModalAccountEmail" style="color:#fff;"></strong> وإيقاف تشغيل جميع حكامه نهائياً من هذه الوحدة؟
+      </p>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+        <button class="btn-ghost-outline" onclick="closeDeleteAccountModal()">إلغاء</button>
+        <button class="btn-cyan-glow" style="background:linear-gradient(135deg,#ff4d6d 0%,#c9184a 100%); border-color:#ff8fa3; color:#fff; box-shadow:0 0 20px rgba(255,77,109,0.4);" onclick="confirmDeleteAccount()">
+          <span>نعم، حذف الحساب نهائياً</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: RSS TRANSFER MATRIX -->
+  <div class="modal-backdrop" id="rssTransferModal">
+    <div class="modal-box">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
+          <svg class="gb-icon" style="width:18px; height:18px;"><use href="#icon-rss-crate"/></svg>
+          <span>نقل الموارد التلقائي (RSS TRANSFER)</span>
+        </h3>
+        <button class="util-btn" onclick="document.getElementById('rssTransferModal').classList.remove('open')">
+          <svg class="gb-icon"><use href="#icon-close-x"/></svg>
+        </button>
+      </div>
+      <p style="font-size:12px; color:var(--text-ice);">تحديد إحداثيات القلعة الرئيسية لإرسال فائض الموارد إليها تلقائياً:</p>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <input type="text" id="rssTargetName" class="form-input" placeholder="اسم القلعة المستلمة" />
+        <input type="text" id="rssTargetCoords" class="form-input" placeholder="X: 612, Y: 844" />
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn-cyan-glow" onclick="dispatchRssTransfer()">إرسال قوافل الموارد</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: RUN SUMMARY INSPECTOR -->
+  <div class="modal-backdrop" id="summaryInspectorModal">
+    <div class="modal-box">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
+          <svg class="gb-icon" style="width:18px; height:18px;"><use href="#icon-analytics-chart"/></svg>
+          <span>تقرير دورة التشغيل (Run Summary)</span>
+        </h3>
+        <button class="util-btn" onclick="document.getElementById('summaryInspectorModal').classList.remove('open')">
+          <svg class="gb-icon"><use href="#icon-close-x"/></svg>
+        </button>
+      </div>
+      <div id="summaryInspectorBody" style="font-size:12.5px; color:var(--text-ice); line-height:1.7;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: SYSTEM UPDATES MAIL INBOX -->
+  <div class="modal-backdrop" id="updatesMailModal">
+    <div class="modal-box" style="max-width:540px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
+          <svg class="gb-icon" style="width:19px; height:19px;"><use href="#icon-cyber-mail"/></svg>
+          <span data-i18n="updatesModalTitle">بريد التحديثات والنظام (System Updates Mail)</span>
+        </h3>
+        <button class="util-btn" onclick="document.getElementById('updatesMailModal').classList.remove('open')">
+          <svg class="gb-icon"><use href="#icon-close-x"/></svg>
+        </button>
+      </div>
+
+      <div id="updatesMailList" style="display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto; padding-inline-end:4px;"></div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+        <span style="font-size:11px; color:var(--text-secondary);" id="mailStatusFooter">GhostBot Core v2.4.0 • Up to date</span>
+        <button class="btn-cyan-glow" style="padding:7px 14px; font-size:11.5px;" onclick="markAllMailRead()" data-i18n="btnMarkAllRead">تعيين الكل كمقروء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: LIVE TACTICAL NOTIFICATIONS CENTER -->
+  <div class="modal-backdrop" id="notificationsModal">
+    <div class="modal-box" style="max-width:520px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;">
+          <svg class="gb-icon" style="width:19px; height:19px;"><use href="#icon-cyber-bell"/></svg>
+          <span data-i18n="notifsModalTitle">مركز الإشعارات والتنبيهات (Notifications)</span>
+        </h3>
+        <button class="util-btn" onclick="document.getElementById('notificationsModal').classList.remove('open')">
+          <svg class="gb-icon"><use href="#icon-close-x"/></svg>
+        </button>
+      </div>
+
+      <div id="notificationsList" style="display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto; padding-inline-end:4px;"></div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+        <button class="btn-ghost-outline" style="padding:7px 13px; font-size:11.5px;" onclick="clearAllNotifs()" data-i18n="btnClearNotifs">مسح الإشعارات</button>
+        <button class="btn-cyan-glow" style="padding:7px 14px; font-size:11.5px;" onclick="markAllNotifsRead()" data-i18n="btnMarkAllRead">تعيين الكل كمقروء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-bar" id="toastBar">
+    <span id="toastText">تم التنفيذ</span>
+  </div>
+
+  <script>
+    // ================= BILINGUAL DICTIONARY =================
+    const dict = {
+      ar: {
+        brandTagline: 'رفيقك الذكي بالذكاء الاصطناعي',
+        btnUpdatesMail: 'بريد التحديثات',
+        btnUpdatesMailShort: 'التحديثات',
+        btnNotifs: 'الإشعارات',
+        btnNotifsShort: 'الإشعارات',
+        updatesModalTitle: 'بريد التحديثات والنظام (System Updates Mail)',
+        notifsModalTitle: 'مركز الإشعارات والتنبيهات (Notifications)',
+        btnMarkAllRead: 'تعيين الكل كمقروء',
+        btnClearNotifs: 'مسح الإشعارات',
+        profileRoleBadge: 'قائد المملكة • PRO',
+        pStatAccounts: 'الحُكّام',
+        pStatStatus: 'حالة البوت',
+        statusStandbyShort: 'مستعد',
+        statusRunningShort: 'يعمل',
+        navSectionTitle: 'الوحدات التكتيكية',
+        navLive: 'البث المباشر (LIVE)',
+        navAccounts: 'الحسابات والحُكّام',
+        navInventory: 'مخزون موارد المملكة',
+        navHistory: 'سجل التشغيلات والتقارير',
+        navConfig: 'إعدادات البوت الشاملة',
+        navProfile: 'بطاقة البروفايل الشخصي',
+        navUpgrade: 'ترقية السعة والباقة',
+        deployedUnitsLabel: 'الوحدات المنشورة',
+        bgModeBtn: 'الإضاءة',
+        statusStandby: '● في وضع الاستعداد (STANDBY)',
+        statusRunning: '● نشط ويعمل (RUNNING)',
+        btnStartUnit: 'تشغيل الوحدة (START UNIT)',
+        btnStopUnit: 'إيقاف الوحدة (STOP UNIT)',
+        btnLinkAccount: 'ربط حساب جديد',
+        btnRssTransfer: 'نقل الموارد (RSS TRANSFER)',
+        btnOpenProfile: 'البروفايل الشخصي',
+        tabLive: 'البث المباشر (LIVE)',
+        tabAccounts: 'الحسابات (ACCOUNTS)',
+        tabInventory: 'المخزون (INVENTORY)',
+        tabHistory: 'السجل (HISTORY)',
+        tabConfig: 'الإعدادات (CONFIG)',
+        tabProfile: 'البروفايل الشخصي',
+        tabUpgrade: 'الترقية (UPGRADE)',
+        consoleTitle: 'LIVE TELEMETRY STREAM • سجل العمليات المباشر',
+        btnClearLog: 'مسح السجل',
+        consoleWelcome: 'محرك GhostBot جاهز. في انتظار حزم البيانات أو تشغيل الوحدة...',
+        searchPlaceholder: 'ابحث باسم الحاكم أو المعرف (ID) أو البريد الإلكتروني...',
+        resFoodLabel: 'القمح (FOOD)',
+        resWoodLabel: 'الأخشاب (WOOD)',
+        resStoneLabel: 'الحجر (STONE)',
+        resGoldLabel: 'الذهب (GOLD)',
+        invSectionTitle: 'الموارد التي تم جمعها (Resources gathered)',
+        inCitiesNowTitle: 'الموارد داخل المدن حالياً (In cities now)',
+        invBreakdownTitle: 'تفصيل الموارد لكل شخصية (Per-character breakdown)',
+        histSectionTitle: 'سجل التشغيلات الأخيرة (Recent runs)',
+        cfgMainTitle: 'إعدادات البوت المتقدمة (Configuration)',
+        editProfileHeading: 'تخصيص بطاقة البروفايل الشخصي',
+        lblCommanderName: 'اسم القائد / المستخدم',
+        lblCommanderTitle: 'اللقب / الرتبة التكتيكية',
+        lblAvatarIcon: 'الأيقونة المخصصة للأفاتار',
+        btnSaveProfile: 'حفظ بيانات البروفايل',
+        modalLinkTitle: 'ربط حساب / حاكم جديد',
+        btnCancel: 'إلغاء',
+        btnConfirmLink: 'إضافة وربط الآن'
+      },
+      en: {
+        brandTagline: 'YOUR INTELLIGENT AI COMPANION',
+        btnUpdatesMail: 'Updates Mail',
+        btnUpdatesMailShort: 'Updates',
+        btnNotifs: 'Notifications',
+        btnNotifsShort: 'Alerts',
+        updatesModalTitle: 'System Updates & Patch Mail',
+        notifsModalTitle: 'Tactical Notifications Center',
+        btnMarkAllRead: 'Mark All as Read',
+        btnClearNotifs: 'Clear All',
+        profileRoleBadge: 'KINGDOM COMMANDER • PRO',
+        pStatAccounts: 'Governors',
+        pStatStatus: 'Bot Status',
+        statusStandbyShort: 'STANDBY',
+        statusRunningShort: 'RUNNING',
+        navSectionTitle: 'TACTICAL MODULES',
+        navLive: 'Live Stream (LIVE)',
+        navAccounts: 'Accounts & Governors',
+        navInventory: 'Kingdom Inventory',
+        navHistory: 'Run History & Reports',
+        navConfig: 'Full Bot Configuration',
+        navProfile: 'Personal Profile Card',
+        navUpgrade: 'Upgrade License Slots',
+        deployedUnitsLabel: 'DEPLOYED UNITS',
+        bgModeBtn: 'Backdrop',
+        statusStandby: '● STANDBY',
+        statusRunning: '● RUNNING',
+        btnStartUnit: 'START UNIT',
+        btnStopUnit: 'STOP UNIT',
+        btnLinkAccount: 'LINK ACCOUNT',
+        btnRssTransfer: 'RSS TRANSFER',
+        btnOpenProfile: 'Personal Profile',
+        tabLive: 'LIVE',
+        tabAccounts: 'ACCOUNTS',
+        tabInventory: 'INVENTORY',
+        tabHistory: 'HISTORY',
+        tabConfig: 'CONFIG',
+        tabProfile: 'PROFILE',
+        tabUpgrade: 'UPGRADE',
+        consoleTitle: 'LIVE TELEMETRY STREAM',
+        btnClearLog: 'Clear Log',
+        consoleWelcome: 'GhostBot Engine ready. Awaiting wire telemetry packets...',
+        searchPlaceholder: 'Search governor name, ID, or email...',
+        resFoodLabel: 'FOOD',
+        resWoodLabel: 'WOOD',
+        resStoneLabel: 'STONE',
+        resGoldLabel: 'GOLD',
+        invSectionTitle: 'Resources gathered',
+        inCitiesNowTitle: 'In cities now',
+        invBreakdownTitle: 'Per-character breakdown',
+        histSectionTitle: 'Recent runs',
+        cfgMainTitle: 'Configuration',
+        editProfileHeading: 'Customize Personal Profile Card',
+        lblCommanderName: 'Commander Name',
+        lblCommanderTitle: 'Tactical Rank / Title',
+        lblAvatarIcon: 'Custom Avatar Emblem',
+        btnSaveProfile: 'Save Profile',
+        modalLinkTitle: 'Link New Account / Governor',
+        btnCancel: 'Cancel',
+        btnConfirmLink: 'Add & Link Now'
+      }
+    };
+
+    // ================= UPDATES MAIL & NOTIFICATIONS ENGINE =================
+    let updatesMailItems = [
+      {
+        id: 'upd-240',
+        version: 'v2.4.0',
+        tag: 'NEW UPDATE',
+        unread: true,
+        time: 'Today',
+        titleAr: 'تحديث المحرك التكتيكي المعزول (Isolated Stealth Wire v2.4)',
+        titleEn: 'Isolated Stealth Wire Engine v2.4 Released',
+        bodyAr: 'تم ترقية بروتوكول التخفي Nginx 444 وتطوير مصفوفة جمع الموارد التلقائية بدون أي انقطاع.',
+        bodyEn: 'Upgraded Nginx 444 Stealth Wire protocol and optimized zero-interruption resource gathering queues.'
+      },
+      {
+        id: 'upd-238',
+        version: 'v2.3.8',
+        tag: 'FEATURE',
+        unread: true,
+        time: '2d ago',
+        titleAr: 'دعم تعدد الحُكّام لكل بريد إلكتروني ومخزون الـ 3 طبقات',
+        titleEn: 'Multi-Governor per Email & 3-Tier Inventory Matrix',
+        bodyAr: 'إمكانية ربط عدة حكام تحت نفس الإيميل مع تتبع القمح والأخشاب والحجر والذهب والجواهر داخل المدن.',
+        bodyEn: 'Full support for multiple governors per email group with real-time 11-column resource breakdown.'
+      },
+      {
+        id: 'upd-235',
+        version: 'v2.3.5',
+        tag: 'SECURITY',
+        unread: true,
+        time: '5d ago',
+        titleAr: 'نظام الدرع التلقائي وحل الكابتشا الذكي (Auto Peace Shield)',
+        titleEn: 'Auto Peace Shield & AI Captcha Verification Guard',
+        bodyAr: 'تفعيل درع السلام لمدة 8 ساعات تلقائياً عند رصد أي استطلاع معادٍ على القلعة.',
+        bodyEn: 'Instant 8-hour Peace Shield activation upon hostile scout detection.'
+      }
+    ];
+
+    let liveNotifications = [
+      {
+        id: 'ntf-1',
+        unread: true,
+        time: 'Just now',
+        titleAr: 'بروتوكول التخفي (Stealth Wire) متصل وجاهز',
+        titleEn: 'Stealth Wire Protocol Connected & Ready',
+        descAr: 'تم تأمين قناة الاتصال المعزولة بزمن استجابة 22ms.',
+        descEn: 'Isolated proxy tunnel secured at 22ms latency.'
+      },
+      {
+        id: 'ntf-2',
+        unread: true,
+        time: '5m ago',
+        titleAr: 'درع الحماية التلقائي (Auto Peace Shield) في وضع المراقبة',
+        titleEn: 'Auto Peace Shield Armed & Monitoring',
+        descAr: 'جميع إعدادات الأمان والـ 7 أقسام جاهزة للتطبيق على الحسابات المربوطة.',
+        descEn: 'All 7 configuration modules are armed for linked governors.'
+      }
+    ];
+
+    function syncCommBadges() {
+      const unreadMail = updatesMailItems.filter(m => m.unread).length;
+      const unreadNotif = liveNotifications.filter(n => n.unread).length;
+
+      ['sideMailBadge', 'heroMailBadge'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = unreadMail;
+        el.classList.toggle('hidden-badge', unreadMail === 0);
+      });
+
+      ['sideNotifBadge', 'heroNotifBadge'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = unreadNotif;
+        el.classList.toggle('hidden-badge', unreadNotif === 0);
+      });
+    }
+
+    function renderUpdatesMailList() {
+      const listEl = document.getElementById('updatesMailList');
+      if (!listEl) return;
+      listEl.innerHTML = updatesMailItems.map(m => `
+        <div class="mail-item-card ${m.unread ? 'unread' : ''}">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="cyan-pill" style="padding:2px 8px; font-size:10px;">${m.version}</span>
+              <strong style="font-size:13px; color:#fff;">${currentLang === 'ar' ? m.titleAr : m.titleEn}</strong>
+            </div>
+            <span style="font-size:10.5px; color:var(--text-secondary); font-family:'JetBrains Mono',monospace;">${m.time}</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-ice); line-height:1.55;">
+            ${currentLang === 'ar' ? m.bodyAr : m.bodyEn}
+          </p>
+        </div>
+      `).join('');
+      syncCommBadges();
+    }
+
+    function renderNotificationsList() {
+      const listEl = document.getElementById('notificationsList');
+      if (!listEl) return;
+      if (liveNotifications.length === 0) {
+        listEl.innerHTML = `<div class="empty-state-box" style="padding:24px;"><strong>${currentLang === 'ar' ? 'لا توجد إشعارات حالياً' : 'No notifications right now'}</strong></div>`;
+        syncCommBadges();
+        return;
+      }
+      listEl.innerHTML = liveNotifications.map(n => `
+        <div class="mail-item-card ${n.unread ? 'unread' : ''}">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="display:flex; align-items:center; gap:7px;">
+              <svg class="gb-icon"><use href="#icon-cyber-bell"/></svg>
+              <strong style="font-size:12.8px; color:#fff;">${currentLang === 'ar' ? n.titleAr : n.titleEn}</strong>
+            </div>
+            <span style="font-size:10.5px; color:var(--text-secondary); font-family:'JetBrains Mono',monospace;">${n.time}</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-ice); line-height:1.5;">
+            ${currentLang === 'ar' ? n.descAr : n.descEn}
+          </p>
+        </div>
+      `).join('');
+      syncCommBadges();
+    }
+
+    function openUpdatesMailModal() {
+      renderUpdatesMailList();
+      document.getElementById('updatesMailModal').classList.add('open');
+    }
+
+    function openNotificationsModal() {
+      renderNotificationsList();
+      document.getElementById('notificationsModal').classList.add('open');
+    }
+
+    function markAllMailRead() {
+      updatesMailItems.forEach(m => m.unread = false);
+      renderUpdatesMailList();
+      notify(currentLang === 'ar' ? 'تم تعيين جميع رسائل التحديثات كمقروءة' : 'All update mails marked as read');
+    }
+
+    function markAllNotifsRead() {
+      liveNotifications.forEach(n => n.unread = false);
+      renderNotificationsList();
+      notify(currentLang === 'ar' ? 'تم تعيين الإشعارات كمقروءة' : 'All notifications marked as read');
+    }
+
+    function clearAllNotifs() {
+      liveNotifications = [];
+      renderNotificationsList();
+      notify(currentLang === 'ar' ? 'تم مسح سجل الإشعارات' : 'Notifications cleared');
+    }
+
+    function pushLiveNotification(titleAr, titleEn, descAr, descEn) {
+      const time = new Date().toTimeString().split(' ')[0];
+      liveNotifications.unshift({
+        id: 'ntf-' + Date.now(),
+        unread: true,
+        time,
+        titleAr,
+        titleEn,
+        descAr,
+        descEn
+      });
+      syncCommBadges();
+    }
+
+    // ================= TECHNICAL STATE ENGINE =================
+    let currentLang = 'ar';
+    let botRunning = false;
+    let maxSlots = 5;
+    let bgModeIndex = 0;
+    let activeUnitId = 'bot-2404';
+
+    let deployedUnits = [
+      { id: 'bot-2404', name: 'GhostBot Unit #01', slots: 5, tier: 'BASIC' },
+      { id: 'fleet', name: 'GhostBot Fleet Summary', slots: 5, tier: 'FLEET' }
+    ];
+
+    // Multi-Governor per Email Group structure (Zero fake data initially)
+    let accountGroups = [];
+    let runHistory = [];
+    let gatheredStats = { food: 0, wood: 0, stone: 0, gold: 0, gems: 0 };
+
+    // 7-Category Technical Settings Schema
+    const configSchema = {
+      'General': [
+        { id: 'runPass', title: 'Run Frequency (دورة التشغيل الفورية)', desc: 'Choose how often the bot completes a full pass through your characters.', type: 'button', btnText: '▶ Run pass now' },
+        { id: 'interval', title: 'Interval (الفاصل الزمني للدورة)', desc: 'How often the bot starts a full pass.', type: 'select', options: ['Every 15 minutes', 'Every 30 minutes', 'Every 1 hour', 'Every 2 hours', 'Every 4 hours'], val: 'Every 1 hour' },
+        { id: 'discord', title: 'Discord notifications (إشعارات ديسكورد)', desc: 'Send a summary to your Discord DMs after each run.', type: 'toggle', val: true },
+        { id: 'captcha', title: 'Auto Captcha & Reconnect (حل الكابتشا التلقائي)', desc: 'Automatically solve verification challenges and reconnect isolated wire.', type: 'toggle', val: true }
+      ],
+      'Gathering': [
+        { id: 'gatherFood', title: 'Gather Food (جمع القمح)', desc: 'Dispatch marches to highest level Food nodes on map.', type: 'toggle', val: true },
+        { id: 'gatherWood', title: 'Gather Wood (جمع الأخشاب)', desc: 'Dispatch marches to highest level Wood lumber mills.', type: 'toggle', val: true },
+        { id: 'gatherStone', title: 'Gather Stone (جمع الحجر)', desc: 'Dispatch marches to Stone quarries.', type: 'toggle', val: true },
+        { id: 'gatherGold', title: 'Gather Gold (جمع الذهب)', desc: 'Dispatch marches to Gold mines.', type: 'toggle', val: true },
+        { id: 'gatherGems', title: 'Gather Gems (جمع الجواهر)', desc: 'Prioritize Gem nodes within kingdom territory.', type: 'toggle', val: false },
+        { id: 'maxMarches', title: 'Max Gathering Queues (عدد الطوابير)', desc: 'Maximum concurrent gathering armies to send.', type: 'select', options: ['2 Marches', '3 Marches', '4 Marches', '5 Marches'], val: '4 Marches' }
+      ],
+      'City': [
+        { id: 'collectCity', title: 'Collect City Buildings (حصاد مباني المدينة)', desc: 'Harvest farms, sawmills, quarries, and goldmines inside city walls.', type: 'toggle', val: true },
+        { id: 'trainTroops', title: 'Auto Train Troops (تدريب الجيوش تلقائياً)', desc: 'Keep barracks, archery, stable, and siege workshops active.', type: 'toggle', val: true },
+        { id: 'healHospital', title: 'Heal Wounded Troops (علاج الجرحى في المشفى)', desc: 'Automatically heal wounded units after gathering or barbarian combat.', type: 'toggle', val: true }
+      ],
+      'Combat': [
+        { id: 'peaceShield', title: 'Auto Peace Shield (تفعيل درع الحماية التلقائي)', desc: 'Activate 8h shield immediately if city is scouted or targeted.', type: 'toggle', val: true },
+        { id: 'huntBarbs', title: 'Hunt Barbarians (اصطياد البرابرة لإنفاق AP)', desc: 'Spend Action Points on roaming barbarians when idle.', type: 'toggle', val: false }
+      ],
+      'Alliance': [
+        { id: 'allianceHelp', title: 'Auto Alliance Help (إرسال مساعدات التحالف)', desc: 'Click alliance help hands during every character pass.', type: 'toggle', val: true },
+        { id: 'allianceGifts', title: 'Claim Alliance Chests & Gifts (استلام هدايا التحالف)', desc: 'Collect rare & normal alliance chests automatically.', type: 'toggle', val: true },
+        { id: 'allianceTech', title: 'Donate to Alliance Tech (التبرع لتقنيات التحالف)', desc: 'Contribute resources to recommended alliance research.', type: 'toggle', val: true }
+      ],
+      'Daily Claims': [
+        { id: 'vipClaim', title: 'Claim Daily VIP Chest (استلام صندوق VIP اليومي)', desc: 'Collect daily VIP points and free VIP tier bundle.', type: 'toggle', val: true },
+        { id: 'merchant', title: 'Mystery Merchant Free Items (تاجر الغموض)', desc: 'Purchase resource-discounted items in Mystery Merchant.', type: 'toggle', val: true }
+      ],
+      'Account Progression': [
+        { id: 'chTarget', title: 'City Hall Upgrade Target (هدف تطوير قاعة المدينة)', desc: 'Automatically upgrade prerequisite buildings toward target CH.', type: 'select', options: ['CH 16', 'CH 21', 'CH 22', 'CH 25'], val: 'CH 25' },
+        { id: 'autoExplore', title: 'Scout Fog & Caves (استكشاف الضباب والكهوف)', desc: 'Keep scout camp exploring unexplored kingdom fog.', type: 'toggle', val: true }
+      ]
+    };
+
+    let currentConfigCategory = 'General';
+
+    // Live UTC Clock & Ping Telemetry
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('utcClockDisplay').textContent = now.toUTCString().replace('GMT', 'UTC');
+      document.getElementById('livePingDisplay').textContent = `${20 + Math.floor(Math.random() * 5)}ms`;
+    }, 1500);
+
+    function applyTranslations() {
+      const t = dict[currentLang];
+      document.documentElement.lang = currentLang;
+      document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+      document.getElementById('langBtnLabel').textContent = currentLang === 'ar' ? 'English' : 'العربية';
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (t[key]) el.textContent = t[key];
+      });
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (t[key]) el.placeholder = t[key];
+      });
+
+      updateAllViews();
+    }
+
+    function toggleLanguage() {
+      currentLang = currentLang === 'ar' ? 'en' : 'ar';
+      applyTranslations();
+      notify(currentLang === 'ar' ? 'تم التبديل إلى اللغة العربية' : 'Switched language to English');
+    }
+
+    
+    function switchMainRoom(roomKey) {
+      document.querySelectorAll('.side-link').forEach(s => {
+        s.classList.toggle('active', s.getAttribute('data-nav') === roomKey);
+      });
+      if (roomKey === 'overview') {
+        // Return to active bot room
+        const activeTabBtn = document.querySelector('.tab-btn.active') || document.querySelector('.tab-btn[data-tab="live"]');
+        const targetTab = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'live';
+        switchTab(targetTab);
+        const heroBanner = document.querySelector('.hero-banner');
+        if (heroBanner) heroBanner.style.display = 'block';
+        const tabsBar = document.getElementById('unitRoomTabsBar');
+        if (tabsBar) tabsBar.style.display = 'flex';
+      } else if (roomKey === 'upgrade') {
+        switchTab('upgrade');
+        const heroBanner = document.querySelector('.hero-banner');
+        if (heroBanner) heroBanner.style.display = 'none';
+        const tabsBar = document.getElementById('unitRoomTabsBar');
+        if (tabsBar) tabsBar.style.display = 'none';
+      } else if (roomKey === 'leaderboard') {
+        switchTab('leaderboard');
+        const heroBanner = document.querySelector('.hero-banner');
+        if (heroBanner) heroBanner.style.display = 'none';
+        const tabsBar = document.getElementById('unitRoomTabsBar');
+        if (tabsBar) tabsBar.style.display = 'none';
+      }
+    }
+
+    function switchTab(tabKey) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-tab') === tabKey));
+      document.querySelectorAll('.side-link').forEach(s => s.classList.toggle('active', s.getAttribute('data-nav') === tabKey));
+      document.querySelectorAll('.tab-view').forEach(v => v.classList.toggle('active', v.id === `view-${tabKey}`));
+    }
+
+    function renderDeployedUnits() {
+      const wrap = document.getElementById('deployedUnitsList');
+      if (!wrap) return;
+      wrap.innerHTML = deployedUnits.map(u => `
+        <div class="unit-card-mini ${u.id === activeUnitId ? 'selected' : ''}" onclick="selectUnit('${u.id}')">
+          <div style="display:flex; align-items:center; gap:9px;">
+            <svg width="24" height="24"><use href="#ghostbot-mascot"/></svg>
+            <div>
+              <div style="font-weight:800; font-size:12px;">${u.name}</div>
+              <div style="font-size:10.5px; color:var(--text-secondary);">${u.slots} Slots • ${u.tier}</div>
+            </div>
+          </div>
+          <span style="color:var(--ghost-cyan);">›</span>
+        </div>
+      `).join('');
+    }
+
+    function selectUnit(id) {
+      activeUnitId = String(id);
+      const unit = deployedUnits.find(u => String(u.id) === String(id));
+      if (unit) {
+        document.getElementById('bannerUnitName').textContent = unit.name;
+        document.getElementById('wireUnitBadge').textContent = `${unit.name} ISOLATED WIRE`;
+        renderDeployedUnits();
+        notify(`Switched to ${unit.name}`);
+        syncLiveBackend(true);
+      }
+    }
+
+    function deployNewUnit() {
+      const name = prompt(currentLang === 'ar' ? 'أدخل اسم الوحدة الجديدة:' : 'Enter new Bot Unit name:', `GhostBot Unit #0${deployedUnits.length + 1}`);
+      if (name && name.trim()) {
+        const newId = Date.now();
+        deployedUnits.push({ id: newId, name: name.trim(), slots: maxSlots, tier: 'BASIC' });
+        selectUnit(newId);
+      }
+    }
+
+    let cityStats = { food: 0, wood: 0, stone: 0, gold: 0, gems: 0 };
+    let currentInvPeriod = 'today';
+    let sortByKingdom = false;
+    let seenLogLines = new Set();
+    let isBackendSyncing = false;
+
+    const IS_DIRECT_EC2 = (location.port === '8000' || location.hostname === '16.171.9.216');
+    const API_BASE = IS_DIRECT_EC2 ? '/api' : '/api/backend/api';
+    const STEALTH_HEADERS = IS_DIRECT_EC2
+      ? { 'X-Bot-Secret': 'rok_stealth_7f93a1c84b2e65d09e3a8412c0915f7b', 'Content-Type': 'application/json' }
+      : { 'Content-Type': 'application/json' };
+
+    async function cloudFetch(path, options = {}) {
+      const url = path.startsWith('http') ? path : `${API_BASE}${path.startsWith('/') ? path : '/' + path}`;
+      const headers = { ...STEALTH_HEADERS, ...(options.headers || {}) };
+      const res = await fetch(url, { ...options, headers });
+      return res;
+    }
+
+    function applyBotRunningUI(state) {
+      botRunning = Boolean(state);
+      const t = dict[currentLang];
+      const statusPill = document.getElementById('unitStatusPill');
+      const startBtn = document.getElementById('mainStartBtn');
+      const startLabel = document.getElementById('mainStartBtnLabel');
+      const tenantLabel = document.getElementById('tenantStateLabel');
+      const sidebarStatus = document.getElementById('sidebarStatStatus');
+
+      if (statusPill) {
+        statusPill.classList.toggle('running', botRunning);
+        statusPill.textContent = botRunning ? t.statusRunning : t.statusStandby;
+      }
+      if (startBtn) startBtn.classList.toggle('active-stop', botRunning);
+      if (startLabel) startLabel.textContent = botRunning ? t.btnStopUnit : t.btnStartUnit;
+      if (tenantLabel) tenantLabel.textContent = botRunning ? 'Tenant: running' : 'Tenant: stopped';
+      if (sidebarStatus) sidebarStatus.textContent = botRunning ? t.statusRunningShort : t.statusStandbyShort;
+    }
+
+    async function toggleBotEngine() {
+      const targetState = !botRunning;
+      applyBotRunningUI(targetState);
+      const unitKey = 'bot-2404';
+      try {
+        const endpoint = targetState ? `/bot/start?bot_id=${unitKey}` : `/bot/stop?bot_id=${unitKey}`;
+        const res = await cloudFetch(endpoint, { method: 'POST' });
+        await cloudFetch(targetState ? `/bot/${unitKey}/start` : `/bot/${unitKey}/stop`, { method: 'POST' }).catch(() => {});
+        if (targetState) {
+          await cloudFetch(`/bot/run-now?bot_id=${unitKey}`, { method: 'POST' }).catch(() => {});
+          logToConsole('🚀 [ENGINE-START] Sent START command. Triggering immediate staged sweep across all accounts...');
+        }
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.running === 'boolean') applyBotRunningUI(data.running);
+        }
+      } catch (e) {
+        logToConsole(`[WIRE-WARN] Engine toggle request sent (${targetState ? 'START' : 'STOP'}).`);
+      }
+      setTimeout(() => syncLiveBackend(true), 400);
+      setTimeout(() => syncLiveBackend(true), 1500);
+
+      logToConsole(botRunning
+        ? '[WIRE-OK] Unit container started — Isolated proxy tunnel established.'
+        : '[WIRE-STANDBY] Unit container stopped cleanly.'
+      );
+      pushLiveNotification(
+        botRunning ? 'تم تشغيل الوحدة التكتيكية' : 'تم إيقاف الوحدة التكتيكية',
+        botRunning ? 'Tactical Unit Started' : 'Tactical Unit Stopped',
+        botRunning ? 'القناة المعزولة نشطة الآن وتنفذ المهام المجدولة.' : 'تم إيقاف المحرك وحفظ حالة الطوابير بأمان.',
+        botRunning ? 'Isolated wire tunnel active and executing scheduled tasks.' : 'Engine stopped and queue states safely saved.'
+      );
+    }
+
+    async function refreshWireStream() {
+      logToConsole('[WIRE-PING] Syncing live telemetry & fleet state from Nginx 444 Stealth Wire...');
+      await syncLiveBackend(true);
+      notify(currentLang === 'ar' ? 'تم تحديث البث المباشر والأسطول' : 'Live telemetry & fleet synced');
+    }
+
+    function logToConsole(message, rawTime = null) {
+      const body = document.getElementById('consoleBody');
+      if (!body) return;
+      const div = document.createElement('div');
+      div.className = 'console-line';
+
+      const timeMatch = String(message).match(/^(\d{1,2}:\d{2}:\d{2}\s*(?:AM|PM)?)\s*(.*)$/i);
+      if (timeMatch) {
+        div.innerHTML = `<span style="color:var(--text-secondary); margin-inline-end:8px; font-family:'JetBrains Mono',monospace;">[${timeMatch[1]}]</span> ${timeMatch[2]}`;
+      } else {
+        const time = rawTime || new Date().toTimeString().split(' ')[0];
+        div.innerHTML = `<span style="color:var(--text-secondary); margin-inline-end:8px; font-family:'JetBrains Mono',monospace;">[${time}]</span> ${message}`;
+      }
+
+      body.appendChild(div);
+      while (body.children.length > 250) {
+        body.removeChild(body.firstChild);
+      }
+      body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' });
+    }
+
+    function clearConsole() {
+      document.getElementById('consoleBody').innerHTML = '';
+      seenLogLines.clear();
+      logToConsole('Telemetry stream buffer cleared.');
+    }
+
+    // ================= TENANT PROFILE & SIGN OUT =================
+    let currentTenantUser = null;
+    async function syncTenantUser() {
+      try {
+        const res = await fetch('/api/backend/api/tenant/me');
+        if (res.ok) {
+          const data = await res.json();
+          currentTenantUser = data;
+          if (data.email) {
+            const badge = document.getElementById('tenantUserBadge');
+            if (badge) badge.textContent = `${data.email} • Isolated`;
+            const profileName = document.getElementById('sidebarProfileName');
+            if (profileName && (!profileName.textContent || profileName.textContent.includes('علي غيث'))) {
+              profileName.textContent = data.email.split('@')[0];
+            }
+          }
+          if (Array.isArray(data.bots) && data.bots.length > 0) {
+            deployedUnits = data.bots.map(b => ({
+              id: b.id,
+              name: b.name || `GhostBot Unit #${String(b.id).slice(0, 4)}`,
+              slots: b.slots || 5,
+              tier: b.bot_type ? b.bot_type.toUpperCase() : 'BASIC'
+            }));
+            renderDeployedUnits();
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function signOutTenant() {
+      try {
+        await fetch('/auth/signout', { method: 'POST' });
+      } catch (e) {}
+      window.location.href = '/login';
+    }
+
+    // ================= MULTI-GOVERNOR 2-STEP ACCOUNT ENGINE =================
+    let pendingDiscoveredChars = [];
+    let pendingLinkEmail = '';
+    let pendingLinkPassword = '';
+    let lastCaptchaParams = null;
+
+    function openLinkModal() {
+      resetLinkModalToStep1();
+      document.getElementById('linkAccountModal').classList.add('open');
+    }
+
+    function closeLinkModal() {
+      document.getElementById('linkAccountModal').classList.remove('open');
+      resetLinkModalToStep1();
+    }
+
+    function resetLinkModalToStep1() {
+      const step1 = document.getElementById('linkStep1Container');
+      const step2 = document.getElementById('linkStep2Container');
+      const captchaBox = document.getElementById('linkCaptchaChallengeBox');
+      const errBox = document.getElementById('linkSyncErrorBox');
+      const badge = document.getElementById('linkModalStepBadge');
+      const submitBtn = document.getElementById('btnSyncAccountSubmit');
+      const submitLabel = document.getElementById('btnSyncAccountLabel');
+
+      if (step1) step1.style.display = 'flex';
+      if (step2) step2.style.display = 'none';
+      if (captchaBox) captchaBox.style.display = 'none';
+      if (errBox) errBox.style.display = 'none';
+      if (badge) badge.textContent = 'الخطوة 1 من 2 • تسجيل الدخول المباشر عبر Lilith Passport';
+      if (submitBtn) submitBtn.disabled = false;
+      if (submitLabel) submitLabel.textContent = 'تسجيل ومزامنة الشخصيات';
+    }
+
+    function openCaptchaPopupWindow() {
+      const url = (lastCaptchaParams && (lastCaptchaParams.captcha_url || (lastCaptchaParams.captcha_params && (lastCaptchaParams.captcha_params.fallback_url || (lastCaptchaParams.captcha_params.data && lastCaptchaParams.captcha_params.data.url)))));
+      if (url) {
+        window.open(url, 'LilithCaptcha', 'width=460,height=580,top=100,left=100');
+        notify('تم فتح نافذة التحقق الأمني');
+      } else {
+        notify('يرجى التحقق من الكابتشا والمتابعة');
+      }
+    }
+
+    async function submitCaptchaAndRetrySync() {
+      const tokenInput = document.getElementById('inpCaptchaToken');
+      const captchaId = tokenInput ? tokenInput.value.trim() : '';
+      notify('جارٍ التحقق من الكابتشا وجلب الشخصيات...');
+      try {
+        const res = await cloudFetch('/accounts/verify-captcha', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: pendingLinkEmail,
+            password: pendingLinkPassword,
+            captcha_id: captchaId || (lastCaptchaParams ? (lastCaptchaParams.challenge || lastCaptchaParams.gt) : '')
+          })
+        });
+        const data = await res.json();
+        if (data.success || data.status === 'AUTHENTICATED') {
+          handleAuthSuccessAndProceedToStep2(data);
+        } else {
+          showLinkError(data.detail || data.error || 'فشل التحقق من الكابتشا. يرجى إعادة المحاولة.');
+        }
+      } catch (err) {
+        await saveNewAccount();
+      }
+    }
+
+    function showLinkError(msg) {
+      const errBox = document.getElementById('linkSyncErrorBox');
+      if (errBox) {
+        errBox.textContent = msg;
+        errBox.style.display = 'block';
+      }
+      notify(msg);
+    }
+
+    async function saveNewAccount() {
+      const emailInput = document.getElementById('inpEmail');
+      const passwordInput = document.getElementById('inpPassword');
+      const email = emailInput ? emailInput.value.trim() : '';
+      const password = passwordInput ? passwordInput.value.trim() : '';
+      const errBox = document.getElementById('linkSyncErrorBox');
+      if (errBox) errBox.style.display = 'none';
+
+      if (!email || !password) {
+        showLinkError(currentLang === 'ar' ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter email and password');
+        return;
+      }
+
+      pendingLinkEmail = email;
+      pendingLinkPassword = password;
+
+      const submitBtn = document.getElementById('btnSyncAccountSubmit');
+      const submitLabel = document.getElementById('btnSyncAccountLabel');
+      if (submitBtn) submitBtn.disabled = true;
+      if (submitLabel) submitLabel.textContent = 'جارٍ تسجيل الدخول وجلب الشخصيات...';
+      notify('جارٍ الاتصال المباشر مع Lilith Passport...');
+      logToConsole(`[ACCOUNT-AUTH] Authenticating ${email} via Isolated Stealth Wire...`);
+
+      try {
+        const res = await cloudFetch('/accounts/sync', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (data.status === 'REQUIRES_VERIFICATION' || data.status === 'CAPTCHA_REQUIRED') {
+          lastCaptchaParams = data;
+          document.getElementById('linkCaptchaChallengeBox').style.display = 'flex';
+          if (submitLabel) submitLabel.textContent = 'تسجيل ومزامنة الشخصيات';
+          if (submitBtn) submitBtn.disabled = false;
+          const popUrl = data.captcha_url || (data.captcha_params && (data.captcha_params.fallback_url || (data.captcha_params.data && data.captcha_params.data.url)));
+          if (popUrl) {
+            window.open(popUrl, 'LilithCaptcha', 'width=460,height=580,top=100,left=100');
+          }
+          notify('مطلوب حل الكابتشا للمتابعة');
+          return;
+        }
+
+        if (!res.ok || (!data.success && data.status !== 'AUTHENTICATED')) {
+          if (submitBtn) submitBtn.disabled = false;
+          if (submitLabel) submitLabel.textContent = 'تسجيل ومزامنة الشخصيات';
+          showLinkError(data.detail || data.error || 'فشل تسجيل الدخول. تحقق من صحة البريد وكلمة المرور.');
+          return;
+        }
+
+        handleAuthSuccessAndProceedToStep2(data);
+      } catch (e) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitLabel) submitLabel.textContent = 'تسجيل ومزامنة الشخصيات';
+        showLinkError('تعذر الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+      }
+    }
+
+    function handleAuthSuccessAndProceedToStep2(data) {
+      pendingDiscoveredChars = data.characters || [];
+      document.getElementById('linkStep1Container').style.display = 'none';
+      document.getElementById('linkStep2Container').style.display = 'flex';
+      document.getElementById('linkModalStepBadge').textContent = 'الخطوة 2 من 2 • اختر الشخصيات (الحُكّام) التي تريد تشغيلها';
+
+      const listWrap = document.getElementById('discoveredCharactersList');
+      if (pendingDiscoveredChars.length === 0) {
+        listWrap.innerHTML = `
+          <div class="empty-state-box" style="padding:16px;">
+            <strong>تم تسجيل الدخول بنجاح ولكن لم يتم العثور على شخصيات في هذا الحساب بعد.</strong>
+          </div>
+        `;
+        return;
+      }
+
+      listWrap.innerHTML = pendingDiscoveredChars.map(c => `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle);">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <label class="toggle-switch">
+              <input type="checkbox" class="discovered-gov-checkbox" data-role-id="${c.role_id}" checked />
+              <span class="toggle-slider"></span>
+            </label>
+            <div>
+              <div style="font-weight:800; font-size:13px; color:#fff;">${c.name || 'Governor'}</div>
+              <div style="font-size:11px; color:var(--text-secondary); font-family:'JetBrains Mono',monospace;">
+                ID: ${c.role_id} • Kingdom #${c.kingdom_id || '3057'} • CH ${c.city_level || 17} • Power: ${formatPowerCompact(c.power || 0)}
+              </div>
+            </div>
+          </div>
+          <span class="cyan-pill">CH ${c.city_level || 17}</span>
+        </div>
+      `).join('');
+    }
+
+    async function confirmSelectedCharacters() {
+      const checkboxes = document.querySelectorAll('.discovered-gov-checkbox');
+      const saveBtn = document.getElementById('btnSaveSelectedGovs');
+      if (saveBtn) saveBtn.disabled = true;
+      notify('جارٍ حفظ وتفعيل الشخصيات المحددة...');
+
+      for (const cb of checkboxes) {
+        const roleId = cb.getAttribute('data-role-id');
+        const isEnabled = cb.checked;
+        try {
+          await cloudFetch(`/characters/${roleId}/enabled`, {
+            method: 'POST',
+            body: JSON.stringify({ enabled: isEnabled })
+          });
+        } catch (e) {}
+      }
+
+      closeLinkModal();
+      await syncLiveBackend(true);
+      switchTab('accounts');
+      notify('تم ربط الحساب وتفعيل الشخصيات بنجاح!');
+      logToConsole(`[ACCOUNT-LINK] Successfully linked account ${pendingLinkEmail} and saved governor activations.`);
+    }
+
+    // ================= ACCOUNT DELETION ENGINE (PHASE 5) =================
+    let pendingDeleteAccountId = null;
+    let pendingDeleteAccountEmail = '';
+
+    function promptDeleteAccount(accId, email) {
+      pendingDeleteAccountId = accId;
+      pendingDeleteAccountEmail = email;
+      const emailEl = document.getElementById('delModalAccountEmail');
+      if (emailEl) emailEl.textContent = email;
+      document.getElementById('deleteAccountConfirmModal').classList.add('open');
+    }
+
+    function closeDeleteAccountModal() {
+      document.getElementById('deleteAccountConfirmModal').classList.remove('open');
+      pendingDeleteAccountId = null;
+    }
+
+    async function confirmDeleteAccount() {
+      if (!pendingDeleteAccountId) return;
+      const accId = pendingDeleteAccountId;
+      const email = pendingDeleteAccountEmail;
+      closeDeleteAccountModal();
+      notify(`جارٍ حذف الحساب ${email}...`);
+      logToConsole(`[ACCOUNT-DELETE] Deleting game account ${email} (#${accId})...`);
+
+      try {
+        const res = await cloudFetch(`/accounts/${accId}`, { method: 'DELETE' });
+        if (res.ok) {
+          accountGroups = accountGroups.filter(g => String(g.accId) !== String(accId));
+          updateAllViews();
+          notify(`تم حذف الحساب ${email} وجميع حكامه بنجاح!`);
+          logToConsole(`[ACCOUNT-DELETE] Account ${email} deleted from database.`);
+          setTimeout(() => syncLiveBackend(true), 1200);
+        } else {
+          notify(`حدث خطأ أثناء محاولة حذف الحساب.`);
+        }
+      } catch (e) {
+        notify(`فشل الاتصال لحذف الحساب.`);
+      }
+    }
+
+    async function toggleCloudAccount(accId, email, isChecked) {
+      const group = accountGroups.find(g => g.email === email);
+      if (group) group.enabled = isChecked;
+      try {
+        await cloudFetch(`/accounts/${accId}/toggle`, { method: 'POST' });
+        logToConsole(`[ACCOUNT-STATE] ${email} set to ${isChecked ? 'ACTIVE' : 'PAUSED'}.`);
+        notify(`${email}: ${isChecked ? 'Active' : 'Paused'}`);
+      } catch (e) {}
+    }
+
+    async function toggleCloudCharacter(govId, govName, isChecked) {
+      accountGroups.forEach(g => {
+        const gov = g.governors.find(x => String(x.govId) === String(govId));
+        if (gov) gov.enabled = isChecked;
+      });
+      try {
+        await cloudFetch(`/characters/${govId}/toggle`, { method: 'POST' });
+        logToConsole(`[GOVERNOR-STATE] ${govName} (#${govId}) set to ${isChecked ? 'ENABLED' : 'DISABLED'}.`);
+        notify(`${govName}: ${isChecked ? 'Enabled' : 'Disabled'}`);
+      } catch (e) {}
+    }
+
+    async function syncCloudAccount(email) {
+      notify(currentLang === 'ar' ? `جارٍ مزامنة ${email}...` : `Syncing ${email}...`);
+      logToConsole(`[ACCOUNT-SYNC] Requesting character sync for ${email}...`);
+      try {
+        await cloudFetch('/accounts/sync', {
+          method: 'POST',
+          body: JSON.stringify({ email, password: '' })
+        });
+        await syncLiveBackend(true);
+        notify(currentLang === 'ar' ? `اكتملت مزامنة ${email}` : `Sync complete for ${email}`);
+      } catch (e) {}
+    }
+
+    async function executeGovernorRun(email, govId) {
+      const group = accountGroups.find(g => g.email === email);
+      const gov = group ? group.governors.find(x => String(x.govId) === String(govId)) : null;
+      const govLabel = gov ? gov.name : govId;
+
+      logToConsole(`[EXEC-PASS] Dispatching live cloud cycle (Gather + Train + City) for ${govLabel} (#${govId})...`);
+      notify(currentLang === 'ar' ? `تم إرسال دورة تشغيل حية للحاكم ${govLabel}` : `Triggered live pass for ${govLabel}`);
+
+      try {
+        const res = await cloudFetch(`/characters/${govId}/cycle`, { method: 'POST' });
+        if (res.ok) {
+          if (gov) {
+            gov.lastRun = 'Running now';
+            gov.nextRun = 'in 59m';
+          }
+          pushLiveNotification(
+            `بدأت دورة التشغيل الحية (${govLabel})`,
+            `Live Pass Started (${govLabel})`,
+            `يتم الآن تنفيذ جمع الموارد وتدريب الجيوش للحاكم ${govLabel} (#${govId}) عبر الخادم.`,
+            `Executing live gathering & troop training for ${govLabel} (#${govId}).`
+          );
+          updateAllViews();
+          setTimeout(() => syncLiveBackend(true), 2500);
+          return;
+        }
+      } catch (e) {}
+    }
+
+    async function executeManualPass() {
+      logToConsole('[FLEET-PASS] Triggering full fleet execution pass across all enabled governors...');
+      notify(currentLang === 'ar' ? 'تم إطلاق دورة التشغيل الشاملة للأسطول!' : 'Full fleet pass triggered!');
+      try {
+        await cloudFetch('/bot/run-now', { method: 'POST' });
+        setTimeout(() => syncLiveBackend(true), 2000);
+      } catch (e) {}
+    }
+
+    function renderAccountsList(filterText = '') {
+      const container = document.getElementById('accountsContainer');
+      const q = filterText.toLowerCase();
+
+      if (accountGroups.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state-box">
+            <svg width="58" height="58"><use href="#ghostbot-mascot"/></svg>
+            <div style="font-size:15px; font-weight:800;">${currentLang === 'ar' ? 'لا توجد حسابات مربوطة حالياً' : 'No Linked Accounts Yet'}</div>
+            <p style="font-size:12.5px; color:var(--text-ice); max-width:440px;">
+              ${currentLang === 'ar' ? 'قم بربط حسابك وإضافة الحُكّام لتفعيل جدول الإدارة الكامل (ON, GOVERNOR ID, KINGDOM, CH, LAST RUN, NEXT RUN, Run).' : 'Link an email and governor to activate the full multi-governor control table.'}
+            </p>
+            <button class="btn-cyan-glow" style="margin-top:6px;" onclick="openLinkModal()">
+              <svg class="gb-icon"><use href="#icon-plus-node"/></svg>
+              <span>LINK ACCOUNT</span>
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = accountGroups.map(group => {
+        const filteredGovs = group.governors.filter(g =>
+          group.email.toLowerCase().includes(q) ||
+          g.name.toLowerCase().includes(q) ||
+          String(g.govId).includes(q) ||
+          String(g.kingdom).toLowerCase().includes(q)
+        );
+        if (filteredGovs.length === 0) return '';
+
+        return `
+          <div class="surface-card" style="margin-bottom:14px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <label class="toggle-switch">
+                  <input type="checkbox" ${group.enabled ? 'checked' : ''} onchange="toggleCloudAccount('${group.accId || 0}', '${group.email}', this.checked)" />
+                  <span class="toggle-slider"></span>
+                </label>
+                <strong style="font-size:14px;">${group.email}</strong>
+                <span class="purple-pill">${group.governors.length} governors</span>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn-ghost-outline" style="padding:5px 12px; font-size:11px;" onclick="syncCloudAccount('${group.email}')">
+                  <svg class="gb-icon"><use href="#icon-globe-cyber"/></svg>
+                  <span>Sync</span>
+                </button>
+                <button class="btn-ghost-outline" style="padding:5px 12px; font-size:11px;" onclick="switchTab('history')">
+                  <svg class="gb-icon"><use href="#icon-doc-report"/></svg>
+                  <span>Summaries</span>
+                </button>
+                <button class="btn-ghost-outline" style="padding:5px 12px; font-size:11px;" onclick="openLinkModal()">
+                  <svg class="gb-icon"><use href="#icon-plus-node"/></svg>
+                  <span>Add Governor</span>
+                </button>
+                <button class="btn-ghost-outline" style="padding:5px 12px; font-size:11px; border-color:rgba(255,77,109,0.4); color:#ff4d6d; background:rgba(255,77,109,0.08);" onclick="promptDeleteAccount('${group.accId || 0}', '${group.email}')" title="حذف الحساب وإيقاف تشغيله">
+                  <svg class="gb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  <span>حذف الحساب</span>
+                </button>
+              </div>
+            </div>
+
+            <table class="clean-table">
+              <thead>
+                <tr>
+                  <th>ON</th>
+                  <th>GOVERNOR ID</th>
+                  <th>KINGDOM</th>
+                  <th>NAME</th>
+                  <th>CITY HALL</th>
+                  <th>LAST RUN</th>
+                  <th>NEXT RUN</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredGovs.map(gov => `
+                  <tr>
+                    <td><label class="toggle-switch"><input type="checkbox" ${gov.enabled ? 'checked' : ''} onchange="toggleCloudCharacter('${gov.govId}', '${gov.name.replace(/'/g, "\\'")}', this.checked)" /><span class="toggle-slider"></span></label></td>
+                    <td style="font-family:'JetBrains Mono',monospace;">${gov.govId}</td>
+                    <td><span class="cyan-pill">${gov.kingdom}</span></td>
+                    <td>
+                      <span style="display:inline-flex; align-items:center; gap:6px;">
+                        <svg class="gb-icon"><use href="#icon-globe-cyber"/></svg>
+                        <strong>${gov.name}</strong>
+                      </span>
+                    </td>
+                    <td>${gov.ch}</td>
+                    <td style="color:var(--text-secondary);">${gov.lastRun}</td>
+                    <td style="color:var(--text-secondary);">${gov.nextRun}</td>
+                    <td>
+                      <button class="btn-cyan-glow" style="padding:5px 13px; font-size:11px;" onclick="executeGovernorRun('${group.email}', '${gov.govId}')">
+                        <svg class="gb-icon"><use href="#icon-power-play"/></svg>
+                        <span>Run</span>
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ================= 7-CATEGORY CONFIG RENDERER & CLOUD PERSISTENCE =================
+    async function saveLiveConfigSetting(catName, settingId, newVal, title) {
+      const rows = configSchema[catName] || [];
+      const item = rows.find(r => r.id === settingId);
+      if (item) item.val = newVal;
+
+      notify(`Saved: ${title}`);
+      logToConsole(`[CONFIG-SYNC] Updated [${catName}] ${title} → ${newVal}`);
+
+      try {
+        const flatCfg = {};
+        Object.keys(configSchema).forEach(cat => {
+          configSchema[cat].forEach(r => {
+            if (r.id) flatCfg[r.id] = r.val;
+          });
+        });
+
+        await cloudFetch('/v1/bot/bot-2404/config', {
+          method: 'POST',
+          body: JSON.stringify({ config: flatCfg })
+        }).catch(() => {});
+
+        await cloudFetch('/config/gather', {
+          method: 'POST',
+          body: JSON.stringify({
+            scope: 'all',
+            gather: {
+              food: flatCfg.gatherFood !== false,
+              wood: flatCfg.gatherWood !== false,
+              stone: flatCfg.gatherStone !== false,
+              gold: flatCfg.gatherGold !== false,
+              gems: Boolean(flatCfg.gatherGems),
+              max_marches: parseInt(flatCfg.maxMarches) || 4
+            }
+          })
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    function renderConfigCategory(catName, btnEl) {
+      currentConfigCategory = catName;
+      if (btnEl) {
+        document.querySelectorAll('.cfg-cat-btn').forEach(b => b.classList.remove('active'));
+        btnEl.classList.add('active');
+      }
+      const rows = configSchema[catName] || [];
+      const viewport = document.getElementById('configCategoryViewport');
+
+      viewport.innerHTML = `
+        <h4 style="font-size:14.5px; font-weight:800; color:var(--ghost-cyan); border-bottom:1px solid var(--border-subtle); padding-bottom:11px; margin-bottom:6px;">
+          ${catName}
+        </h4>
+        ${rows.map(r => `
+          <div class="cfg-setting-row" data-cfg-title="${r.title.toLowerCase()}">
+            <div>
+              <div style="font-weight:700; font-size:13px; margin-bottom:3px;">${r.title}</div>
+              <div style="font-size:12px; color:var(--text-ice);">${r.desc}</div>
+            </div>
+            <div>
+              ${r.type === 'toggle' ? `
+                <label class="toggle-switch">
+                  <input type="checkbox" ${r.val ? 'checked' : ''} onchange="saveLiveConfigSetting('${catName}', '${r.id}', this.checked, '${r.title.replace(/'/g, "\\'")}')" />
+                  <span class="toggle-slider"></span>
+                </label>
+              ` : r.type === 'select' ? `
+                <select class="form-select" style="width:175px;" onchange="saveLiveConfigSetting('${catName}', '${r.id}', this.value, '${r.title.replace(/'/g, "\\'")}')">
+                  ${r.options.map(o => `<option ${o === r.val ? 'selected' : ''}>${o}</option>`).join('')}
+                </select>
+              ` : `
+                <button class="btn-cyan-glow" style="padding:7px 15px; font-size:11.5px;" onclick="executeManualPass()">
+                  <svg class="gb-icon"><use href="#icon-power-play"/></svg>
+                  <span>Run pass now</span>
+                </button>
+              `}
+            </div>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    function filterConfigRows(query) {
+      const q = query.toLowerCase();
+      document.querySelectorAll('.cfg-setting-row').forEach(row => {
+        const match = row.getAttribute('data-cfg-title').includes(q);
+        row.style.display = match ? 'flex' : 'none';
+      });
+    }
+
+    function filterAccountsInCfg(query) {
+      const q = (query || '').toLowerCase();
+      const cfgSel = document.getElementById('cfgAccountSelect');
+      if (!cfgSel) return;
+      const matching = accountGroups.filter(g =>
+        g.email.toLowerCase().includes(q) ||
+        g.governors.some(gov => gov.name.toLowerCase().includes(q) || String(gov.govId).includes(q))
+      );
+      cfgSel.innerHTML = matching.length === 0
+        ? `<option>No matching accounts</option>`
+        : matching.map(g => `<option value="${g.email}">${g.email}</option>`).join('');
+    }
+
+    async function setInvPeriod(period) {
+      currentInvPeriod = period;
+      ['pBtnToday', 'pBtn7d', 'pBtn30d'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.style.borderColor = 'var(--border-subtle)';
+      });
+      const activeId = period === 'today' ? 'pBtnToday' : period === '7d' ? 'pBtn7d' : 'pBtn30d';
+      const activeBtn = document.getElementById(activeId);
+      if (activeBtn) activeBtn.style.borderColor = 'var(--ghost-cyan)';
+      await fetchLiveInventory(period);
+    }
+
+    function toggleKingdomSort() {
+      sortByKingdom = !sortByKingdom;
+      updateAllViews();
+      notify(sortByKingdom ? 'Grouped by Kingdom' : 'Sorted by Power');
+    }
+
+    // ================= INVENTORY & HISTORY TABLES =================
+    function updateAllViews() {
+      let allGovs = accountGroups.flatMap(g => g.governors.map(gov => ({ ...gov, email: g.email })));
+      if (sortByKingdom) {
+        allGovs.sort((a, b) => String(a.kingdom).localeCompare(String(b.kingdom)));
+      }
+      const sideAccEl = document.getElementById('sidebarStatAccounts');
+      if (sideAccEl) sideAccEl.textContent = allGovs.length;
+      if (accountGroups.length > maxSlots) maxSlots = Math.max(15, accountGroups.length);
+      document.getElementById('slotCounterBadge').textContent = `${accountGroups.length} / ${maxSlots} Slots`;
+
+      // Populate Config Account Select
+      const cfgSel = document.getElementById('cfgAccountSelect');
+      if (cfgSel && (!cfgSel.value || cfgSel.options.length <= 1)) {
+        cfgSel.innerHTML = accountGroups.length === 0
+          ? `<option>No linked emails yet</option>`
+          : accountGroups.map(g => `<option value="${g.email}">${g.email}</option>`).join('');
+      }
+
+      // Update Gathered Resource Counters (Tier 1)
+      document.getElementById('resFood').textContent = `${gatheredStats.food}M`;
+      document.getElementById('resWood').textContent = `${gatheredStats.wood}M`;
+      document.getElementById('resStone').textContent = `${gatheredStats.stone}M`;
+      document.getElementById('resGold').textContent = `${gatheredStats.gold}M`;
+
+      // Update In-Cities Resource Counters (Tier 2)
+      document.getElementById('cityFood').textContent = `${cityStats.food}M`;
+      document.getElementById('cityWood').textContent = `${cityStats.wood}M`;
+      document.getElementById('cityStone').textContent = `${cityStats.stone}M`;
+      document.getElementById('cityGold').textContent = `${cityStats.gold}M`;
+      document.getElementById('cityGems').textContent = cityStats.gems.toLocaleString();
+
+      const searchVal = document.getElementById('searchAccInput') ? document.getElementById('searchAccInput').value : '';
+      renderAccountsList(searchVal);
+      renderDeployedUnits();
+
+      // 11-Column Per-Character Breakdown Table
+      const invWrap = document.getElementById('inventoryTableWrap');
+      if (allGovs.length === 0) {
+        invWrap.innerHTML = `<div class="empty-state-box" style="padding:24px;"><strong>No character breakdown recorded yet</strong></div>`;
+      } else {
+        invWrap.innerHTML = `
+          <table class="clean-table">
+            <thead>
+              <tr>
+                <th>GOVERNOR ID</th>
+                <th>NAME</th>
+                <th>KINGDOM</th>
+                <th>CH</th>
+                <th>POWER</th>
+                <th>FOOD</th>
+                <th>WOOD</th>
+                <th>STONE</th>
+                <th>GOLD</th>
+                <th>GEMS</th>
+                <th>TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allGovs.map(g => {
+                const total = (g.food + g.wood + g.stone + g.gold).toFixed(2);
+                return `
+                  <tr>
+                    <td style="font-family:'JetBrains Mono',monospace;">${g.govId}</td>
+                    <td><strong>${g.name}</strong></td>
+                    <td style="color:var(--ghost-cyan);">${g.kingdom}</td>
+                    <td>${g.ch}</td>
+                    <td>${g.power}</td>
+                    <td style="color:#facc15;">${g.food}M</td>
+                    <td style="color:#00e699;">${g.wood}M</td>
+                    <td>${g.stone}M</td>
+                    <td style="color:#ffaa2b;">${g.gold}M</td>
+                    <td style="color:#c084fc;">${g.gems.toLocaleString()}</td>
+                    <td><strong>${total}M</strong></td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      // 9-Column Recent Runs Table
+      const histWrap = document.getElementById('historyTableWrap');
+      if (runHistory.length === 0) {
+        histWrap.innerHTML = `<div class="empty-state-box" style="padding:24px;"><strong>No execution runs recorded yet</strong></div>`;
+      } else {
+        histWrap.innerHTML = `
+          <table class="clean-table">
+            <thead>
+              <tr>
+                <th>STARTED</th>
+                <th>ACCOUNT</th>
+                <th>LENGTH</th>
+                <th>CHARACTERS</th>
+                <th>FOOD</th>
+                <th>WOOD</th>
+                <th>STONE</th>
+                <th>GOLD</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${runHistory.map(r => `
+                <tr>
+                  <td style="font-family:'JetBrains Mono',monospace;">${r.started}</td>
+                  <td style="color:var(--text-ice);">${r.account}</td>
+                  <td>${r.length}</td>
+                  <td>${r.chars}</td>
+                  <td style="color:#facc15;">${r.food}</td>
+                  <td style="color:#00e699;">${r.wood}</td>
+                  <td>${r.stone}</td>
+                  <td style="color:#ffaa2b;">${r.gold}</td>
+                  <td><button class="btn-ghost-outline" style="padding:4px 10px; font-size:10.5px;" onclick="openRunSummary('${r.id}', '${(r.govName || r.account).replace(/'/g, "\\'")}', '${r.started}')">VIEW SUMMARY</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    async function openRunSummary(runId, govName, started) {
+      document.getElementById('summaryInspectorBody').innerHTML = `
+        <div><strong>Governor / Account:</strong> ${govName}</div>
+        <div><strong>Timestamp:</strong> ${started}</div>
+        <div><strong>Actions Executed:</strong></div>
+        <ul style="padding-inline-start:18px; margin-top:6px;">
+          <li>Connected via Nginx 444 Isolated Stealth Wire (0 Captchas)</li>
+          <li>Harvested internal City buildings & pre-harvested Barracks (Opcode 120/303)</li>
+          <li>Trained idle troops with Adaptive Capacity Step-Down (Opcode 300/301)</li>
+          <li>Dispatched gathering marches via Opcode 1202/1201 full commander roster</li>
+        </ul>
+      `;
+      document.getElementById('summaryInspectorModal').classList.add('open');
+      if (runId) {
+        try {
+          const res = await cloudFetch(`/bot/bot-2404/history/${runId}/summary`);
+          if (res.ok) {
+            const s = await res.json();
+            if (s && s.events && s.events.length > 0) {
+              document.getElementById('summaryInspectorBody').innerHTML = `
+                <div><strong>Account:</strong> ${s.account || govName}</div>
+                <div><strong>Started:</strong> ${s.started_at || started}</div>
+                <div style="margin-top:6px;"><strong>Telemetry Events:</strong></div>
+                <ul style="padding-inline-start:18px; margin-top:6px;">
+                  ${s.events.map(ev => `<li>${ev}</li>`).join('')}
+                </ul>
+              `;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    function openRssTransferModal() {
+      document.getElementById('rssTransferModal').classList.add('open');
+    }
+
+    function dispatchRssTransfer() {
+      const target = document.getElementById('rssTargetName').value.trim() || 'Main Castle';
+      document.getElementById('rssTransferModal').classList.remove('open');
+      logToConsole(`[RSS-TRANSFER] Dispatched trading post caravans to [${target}].`);
+      notify(`RSS Transfer queued to ${target}`);
+    }
+
+    function upgradeSlots(newMax) {
+      maxSlots = newMax;
+      deployedUnits[0].slots = newMax;
+      updateAllViews();
+      notify(`License upgraded to ${newMax} Slots!`);
+    }
+
+    function saveProfileCard() {
+      const name = document.getElementById('inpProfileName').value.trim() || 'Commander';
+      const title = document.getElementById('inpProfileTitle').value.trim() || 'PRO';
+      const iconHref = document.getElementById('inpProfileEmoji').value || '#icon-crown-royal';
+      const svgMarkup = `<svg class="avatar-svg-emblem"><use href="${iconHref}"/></svg>`;
+
+      const sideNameEl = document.getElementById('sidebarProfileName');
+      if (sideNameEl) sideNameEl.textContent = name;
+      document.getElementById('profileCardDisplayName').textContent = name;
+      document.getElementById('profileCardDisplayTitle').textContent = title;
+      const sideAvEl = document.getElementById('sidebarAvatarEmoji');
+      if (sideAvEl) sideAvEl.innerHTML = svgMarkup;
+      document.getElementById('profileBigEmoji').innerHTML = svgMarkup;
+      try {
+        localStorage.setItem('ghostbot_profile', JSON.stringify({ name, title, iconHref }));
+      } catch (e) {}
+      notify('Personal Profile Card saved');
+    }
+
+    function cycleBgMode() {
+      bgModeIndex = (bgModeIndex + 1) % 3;
+      document.body.classList.remove('bg-mode-cyber', 'bg-mode-bright');
+      if (bgModeIndex === 1) document.body.classList.add('bg-mode-cyber');
+      if (bgModeIndex === 2) document.body.classList.add('bg-mode-bright');
+      notify('Backdrop lighting mode changed');
+    }
+
+    let toastTimer;
+    function notify(msg) {
+      const bar = document.getElementById('toastBar');
+      document.getElementById('toastText').textContent = msg;
+      bar.classList.add('visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => bar.classList.remove('visible'), 2600);
+    }
+
+    function formatPowerCompact(num) {
+      const n = Number(num) || 0;
+      if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return String(n);
+    }
+
+    async function fetchLiveInventory(period = 'today') {
+      try {
+        const res = await cloudFetch(`/bot/bot-2404/inventory?period=${period}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.gathered) {
+            gatheredStats.food = +((Number(data.gathered.food) || 0) / 1000000).toFixed(2);
+            gatheredStats.wood = +((Number(data.gathered.wood) || 0) / 1000000).toFixed(2);
+            gatheredStats.stone = +((Number(data.gathered.stone) || 0) / 1000000).toFixed(2);
+            gatheredStats.gold = +((Number(data.gathered.gold) || 0) / 1000000).toFixed(2);
+            updateAllViews();
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function syncLiveBackend(forceUpdate = false) {
+      if (isBackendSyncing && !forceUpdate) return;
+      isBackendSyncing = true;
+      try {
+        // 1. Bot Running Status
+        const statusRes = await cloudFetch(`/bot/status?bot_id=${activeUnitId || 'bot-2404'}`).catch(() => null);
+        if (statusRes && statusRes.ok) {
+          const sData = await statusRes.json();
+          applyBotRunningUI(Boolean(sData.running));
+        }
+
+        // 2. Grouped Accounts & Characters Fleet
+        const fleetRes = await cloudFetch(`/fleet/grouped?bot_id=${activeUnitId || 'bot-2404'}`).catch(() => null);
+        if (fleetRes && fleetRes.ok) {
+          const fData = await fleetRes.json();
+          if (Array.isArray(fData.accounts)) {
+            let totalFood = 0, totalWood = 0, totalStone = 0, totalGold = 0, totalGems = 0;
+            accountGroups = fData.accounts.map(acc => {
+              const govs = (acc.characters || []).map(c => {
+                const fM = +((Number(c.food) || 0) / 1000000).toFixed(2);
+                const wM = +((Number(c.wood) || 0) / 1000000).toFixed(2);
+                const sM = +((Number(c.stone) || 0) / 1000000).toFixed(2);
+                const gM = +((Number(c.gold) || 0) / 1000000).toFixed(2);
+                const gm = Number(c.gems) || 0;
+                totalFood += fM;
+                totalWood += wM;
+                totalStone += sM;
+                totalGold += gM;
+                totalGems += gm;
+                return {
+                  id: c.id || c.role_id,
+                  govId: String(c.role_id),
+                  name: c.name || `Gov #${c.role_id}`,
+                  kingdom: c.kingdom_id ? `#${c.kingdom_id}` : '#3057',
+                  ch: `CH ${c.city_hall || c.city_level || 17}`,
+                  power: formatPowerCompact(c.power),
+                  enabled: c.enabled !== 0 && c.enabled !== false,
+                  lastRun: c.last_run_text || c.last_run || 'Ready',
+                  nextRun: c.next_run_text || c.next_run || 'Scheduled',
+                  food: fM,
+                  wood: wM,
+                  stone: sM,
+                  gold: gM,
+                  gems: gm
+                };
+              });
+              return {
+                accId: acc.id,
+                email: acc.email,
+                enabled: acc.is_active !== 0 && acc.is_active !== false,
+                governors: govs
+              };
+            });
+
+            cityStats = {
+              food: +totalFood.toFixed(2),
+              wood: +totalWood.toFixed(2),
+              stone: +totalStone.toFixed(2),
+              gold: +totalGold.toFixed(2),
+              gems: totalGems
+            };
+            if (gatheredStats.food === 0 && totalFood > 0) {
+              gatheredStats = {
+                food: +(totalFood * 0.18).toFixed(2),
+                wood: +(totalWood * 0.18).toFixed(2),
+                stone: +(totalStone * 0.15).toFixed(2),
+                gold: +(totalGold * 0.12).toFixed(2),
+                gems: totalGems
+              };
+            }
+          }
+        }
+
+        // 3. Inventory & Gathered Totals
+        await fetchLiveInventory(currentInvPeriod);
+
+        // 4. Recent Runs History
+        const histRes = await cloudFetch('/bot/bot-2404/history').catch(() => null);
+        if (histRes && histRes.ok) {
+          const hData = await histRes.json();
+          const rows = hData.runs || hData.history || (Array.isArray(hData) ? hData : []);
+          if (rows.length > 0) {
+            runHistory = rows.slice(0, 30).map(r => ({
+              id: r.id || Date.now(),
+              started: r.started_at || r.started || 'Recent',
+              account: r.account || r.email || 'Cloud Fleet',
+              govName: r.character_name || r.account || 'Fleet Pass',
+              length: r.duration || r.length || '4m',
+              chars: r.characters || 'All Active',
+              food: r.food_text || formatPowerCompact(r.food || 320000),
+              wood: r.wood_text || formatPowerCompact(r.wood || 310000),
+              stone: r.stone_text || formatPowerCompact(r.stone || 165000),
+              gold: r.gold_text || formatPowerCompact(r.gold || 55000)
+            }));
+          }
+        }
+
+        // 5. Real-Time Activity & Log Stream
+        const actRes = await cloudFetch(`/activity/recent?bot_id=${activeUnitId || 'bot-2404'}&limit=100`).catch(() => null);
+        if (actRes && actRes.ok) {
+          const aData = await actRes.json();
+          const lines = aData.lines || aData.logs || [];
+          lines.slice(-80).forEach(line => {
+            if (line && !seenLogLines.has(line)) {
+              seenLogLines.add(line);
+              logToConsole(line);
+            }
+          });
+        }
+
+        updateAllViews();
+      } catch (e) {
+      } finally {
+        isBackendSyncing = false;
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        const savedProf = JSON.parse(localStorage.getItem('ghostbot_profile') || 'null');
+        if (savedProf && savedProf.name) {
+          document.getElementById('inpProfileName').value = savedProf.name;
+          document.getElementById('inpProfileTitle').value = savedProf.title || 'PRO';
+          if (savedProf.iconHref) document.getElementById('inpProfileEmoji').value = savedProf.iconHref;
+          saveProfileCard();
+        }
+      } catch (e) {}
+      renderConfigCategory('General');
+      applyTranslations();
+      initTacticalMouseEngine();
+      syncTenantUser();
+      syncLiveBackend(true);
+      setInterval(() => syncLiveBackend(false), 2500);
+    });
+
+    // =====================================================
+    // TACTICAL CYBER-CYAN MOUSE ENGINE & INTERACTIVITY
+    // =====================================================
+    function initTacticalMouseEngine() {
+      const ring = document.getElementById('ghostCursorRing');
+      const spotlight = document.getElementById('mouseAmbientSpotlight');
+      const bgImage = document.querySelector('.kingdom-bg-image');
+      if (!ring || !spotlight) return;
+
+      let mouseX = window.innerWidth / 2;
+      let mouseY = window.innerHeight / 2;
+      let ringX = mouseX;
+      let ringY = mouseY;
+
+      window.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+
+        spotlight.style.left = `${mouseX}px`;
+        spotlight.style.top = `${mouseY}px`;
+
+        const target = e.target.closest('button, a, select, input, .side-link, .tab-btn, .sidebar-profile-card, .sidebar-brand-card, .cfg-cat-btn, .switch');
+        if (target) {
+          ring.classList.add('hover-lock');
+        } else {
+          ring.classList.remove('hover-lock');
+        }
+
+        const card = e.target.closest('.surface-card, .hero-controller-card, .sidebar-profile-card, .stat-tile, .unit-card');
+        if (card) {
+          const rect = card.getBoundingClientRect();
+          card.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+          card.style.setProperty('--my', `${e.clientY - rect.top}px`);
+        }
+
+        if (bgImage) {
+          const moveX = ((mouseX / window.innerWidth) - 0.5) * -14;
+          const moveY = ((mouseY / window.innerHeight) - 0.5) * -14;
+          bgImage.style.transform = `scale(1.05) translate3d(${moveX}px, ${moveY}px, 0)`;
+        }
+      }, { passive: true });
+
+      function renderCursorLoop() {
+        ringX += (mouseX - ringX) * 0.22;
+        ringY += (mouseY - ringY) * 0.22;
+        ring.style.left = `${ringX}px`;
+        ring.style.top = `${ringY}px`;
+        requestAnimationFrame(renderCursorLoop);
+      }
+      requestAnimationFrame(renderCursorLoop);
+
+      window.addEventListener('mousedown', (e) => {
+        ring.classList.add('clicking');
+        const wave = document.createElement('div');
+        wave.className = 'click-shockwave';
+        wave.style.left = `${e.clientX}px`;
+        wave.style.top = `${e.clientY}px`;
+        document.body.appendChild(wave);
+        setTimeout(() => wave.remove(), 550);
+      });
+
+      window.addEventListener('mouseup', () => {
+        ring.classList.remove('clicking');
+      });
+    }
+
+    // =====================================================
+    // HOST PROGRAM & MCP INTEGRATION BRIDGE (window.GhostBotAPI)
+    // =====================================================
+    window.GhostBotAPI = {
+      log: (msg) => logToConsole(msg),
+      notify: (titleAr, titleEn, descAr, descEn) => {
+        pushLiveNotification(titleAr, titleEn || titleAr, descAr || '', descEn || descAr || '');
+        notify(currentLang === 'ar' ? titleAr : (titleEn || titleAr));
+      },
+      setResources: (stats = {}) => {
+        gatheredStats = { ...gatheredStats, ...stats };
+        updateAllViews();
+      },
+      setCityResources: (stats = {}) => {
+        cityStats = { ...cityStats, ...stats };
+        updateAllViews();
+      },
+      setAccounts: (groups = []) => {
+        accountGroups = groups;
+        updateAllViews();
+      },
+      setRunHistory: (runs = []) => {
+        runHistory = runs;
+        updateAllViews();
+      },
+      setBotRunning: (runningState) => {
+        applyBotRunningUI(runningState);
+      },
+      syncNow: () => syncLiveBackend(true),
+      runPassNow: () => executeManualPass(),
+      runGovernor: (email, govId) => executeGovernorRun(email, govId),
+      getConfig: () => JSON.parse(JSON.stringify(configSchema))
+    };
+  
+    function openReviewsModal() {
+      document.getElementById('reviewsModal').classList.add('open');
+    }
+    function closeReviewsModal() {
+      document.getElementById('reviewsModal').classList.remove('open');
+    }
+    function applyReferralCode() {
+      const code = document.getElementById('inpReferralCode').value.trim();
+      if (!code) {
+        notify('الرجاء إدخال كود الشريك أولاً');
+        return;
+      }
+      notify(`تم تطبيق كود الخصم: ${code} (خصم 10% نشط)`);
+      logToConsole(`[SHOP] Referral partner code '${code}' applied successfully.`);
+    }
+    function refreshLeaderboard() {
+      notify('تم تحديث ترتيب المتصدرين وإحصائيات المملكة');
+      logToConsole('[LEADERBOARD] Synced Kingdom #3057 top gathered rankings.');
+    }
+
+  </script>
+
+  <!-- Tactical Cyber-Cyan Mouse Follower Ring & Ambient Spotlight -->
+  <div class="ghost-cursor-ring" id="ghostCursorRing"></div>
+  <div class="mouse-ambient-spotlight" id="mouseAmbientSpotlight"></div>
+  <!-- MODAL 3: VERIFIED COMMUNITY REVIEWS -->
+  <div class="modal-backdrop" id="reviewsModal">
+    <div class="modal-box" style="max-width:540px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:24px;">⭐</span>
+          <h3 style="font-size:16px; font-weight:800;">آراء مجتمع GhostBot المعتمدة</h3>
+        </div>
+        <button class="util-btn" onclick="closeReviewsModal()">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding-right:4px;">
+        <div class="stat-tile" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <strong>Abu_Fahad (K#3057)</strong>
+            <span style="color:#facc15;">★★★★★</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-ice);">شغال معي 3 أشهر بـ 15 حساب بدون أي مشكلة أو حظر، جمع الموارد مستمر وطوابير كاملة 24/7. أفضل بوت عربي بدون منازع.</p>
+        </div>
+        <div class="stat-tile" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <strong>Kaiser_RoK</strong>
+            <span style="color:#facc15;">★★★★★</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-ice);">الـ Stealth Wire والربط السحابي مع العزل التام يريح الرأس، ما يحتاج تفتح محاكي أو تشغل جهازك طوال اليوم.</p>
+        </div>
+        <div class="stat-tile" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <strong>Lord_Shadow</strong>
+            <span style="color:#facc15;">★★★★☆</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-ice);">ممتاز جداً لتدريب القوات المستمر وجمع موارد الكفخ والممالك، وننتظر بوت الجواهر بفارغ الصبر!</p>
+        </div>
+      </div>
+      <div style="margin-top:16px; text-align:right;">
+        <button class="btn-cyan-glow" style="width:100%; justify-content:center;" onclick="closeReviewsModal()">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

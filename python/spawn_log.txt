@@ -1,0 +1,8 @@
+Starting...
+Spawning C:\Program Files (x86)\Rise of Kingdoms\Rise of Kingdoms Game\MASS.exe...
+ERROR: 'int' object has no attribute '_pid'
+Traceback (most recent call last):
+  File "D:\وندوز\Headless Bot RoK\python\simple_spawn.py", line 51, in <module>
+    pid = session._pid
+          ^^^^^^^^^^^^
+AttributeError: 'int' object has no attribute '_pid'

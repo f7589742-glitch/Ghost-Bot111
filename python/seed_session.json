@@ -1,0 +1,96 @@
+[
+  {
+    "type": "orch_dump",
+    "stack": [
+      {
+        "offset": -5,
+        "raw": "0x2C719D774E0",
+        "tt": 5
+      },
+      {
+        "offset": -4,
+        "raw": "0x417A1DAC00000000",
+        "tt": 3
+      },
+      {
+        "offset": -3,
+        "raw": "0x41C3CBFD38800000",
+        "tt": 3
+      },
+      {
+        "offset": -2,
+        "raw": "0x0",
+        "tt": 3
+      },
+      {
+        "offset": -1,
+        "raw": "0x2C6E18F87B0",
+        "tt": 6
+      },
+      {
+        "offset": 0,
+        "raw": "0x41C3CBFD38800000",
+        "tt": 3
+      },
+      {
+        "offset": 1,
+        "raw": "0x417A1DAC00000000",
+        "tt": 3
+      },
+      {
+        "offset": 2,
+        "raw": "0x41C3CBFD38800000",
+        "tt": 3
+      },
+      {
+        "offset": 3,
+        "raw": "0x0",
+        "tt": 0
+      },
+      {
+        "offset": 4,
+        "raw": "0x2C6EA662960",
+        "tt": 0
+      },
+      {
+        "offset": 5,
+        "raw": "0x2C6B1F20680",
+        "tt": 0
+      }
+    ],
+    "frames": [
+      "EngineDll.dll+0xC76D5",
+      "EngineDll.dll+0xE44B8",
+      "EngineDll.dll+0xC78C6",
+      "EngineDll.dll+0xC6D91",
+      "EngineDll.dll+0xC7BCD",
+      "EngineDll.dll+0x1A672",
+      "EngineDll.dll+0x624EE",
+      "EngineDll.dll+0xC76D5",
+      "EngineDll.dll+0xE44B8",
+      "EngineDll.dll+0xC78C6",
+      "EngineDll.dll+0xC6D91",
+      "EngineDll.dll+0xC7BCD",
+      "EngineDll.dll+0x9F137",
+      "EngineDll.dll+0x7509B",
+      "GameAssembly.dll+0xB59753"
+    ],
+    "ts": 1784066184944
+  },
+  {
+    "type": "seed",
+    "ch": 1,
+    "seed": "0x2797FA71",
+    "reg": "0x22958368",
+    "caller": "0x63713",
+    "ts": 1784066184944
+  },
+  {
+    "type": "seed",
+    "ch": 2,
+    "seed": "0x1A1DAC0",
+    "reg": "0x4A3A3D9",
+    "caller": "0x63721",
+    "ts": 1784066184944
+  }
+]

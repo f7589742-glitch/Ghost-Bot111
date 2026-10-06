@@ -1,0 +1,11 @@
+[-] ntdll hook err: TypeError: not a function
+[-] send inspect err: TypeError: not a function
+[EngineDll] base=0x7ff9e2920000 size=3473408 end=0x7ff9e2c70000
+[-] memory scan err: TypeError: not a function
+[-] FREncry inspect err: TypeError: not a function
+[Pattern scan] pattern=46 52 45 6E 63 72 79 matches=0
+[Pattern scan] pattern=66 72 65 6E 63 72 79 matches=0
+[GameAssembly net funcs] 2 found
+  CloseNLSocket @ 0x7ff942c36110
+  CreateNLSocket @ 0x7ff942c361e0
+[*] Analysis complete

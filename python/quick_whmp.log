@@ -1,0 +1,34 @@
+Profile: teez8888  uid=220293855
+Greeting ok
+Sent: login(79B) + whmp2(11B) back-to-back
+  [0.3s] RX(4B) f1=0x36(ACK)
+  [0.4s] RX(9B) f1=1
+  [5.5s] Only 2 frames in 5s, sending keepalives
+  [6.5s] Only 2 frames in 5s, sending keepalives
+  [7.5s] Only 2 frames in 5s, sending keepalives
+  [8.5s] Only 2 frames in 5s, sending keepalives
+  [9.5s] Only 2 frames in 5s, sending keepalives
+  [10.5s] Only 2 frames in 5s, sending keepalives
+  [11.5s] Only 2 frames in 5s, sending keepalives
+  [12.5s] Only 2 frames in 5s, sending keepalives
+  [13.5s] Only 2 frames in 5s, sending keepalives
+  [14.5s] Only 2 frames in 5s, sending keepalives
+  [15.5s] Only 2 frames in 5s, sending keepalives
+  [16.5s] Only 2 frames in 5s, sending keepalives
+  [17.5s] Only 2 frames in 5s, sending keepalives
+  [18.5s] Only 2 frames in 5s, sending keepalives
+  [19.5s] Only 2 frames in 5s, sending keepalives
+  [20.5s] Only 2 frames in 5s, sending keepalives
+  [21.6s] Only 2 frames in 5s, sending keepalives
+  [22.6s] Only 2 frames in 5s, sending keepalives
+  [23.6s] Only 2 frames in 5s, sending keepalives
+  [24.6s] Only 2 frames in 5s, sending keepalives
+  [25.6s] Only 2 frames in 5s, sending keepalives
+  [26.6s] Only 2 frames in 5s, sending keepalives
+  [27.6s] Only 2 frames in 5s, sending keepalives
+  [28.6s] Only 2 frames in 5s, sending keepalives
+  [29.6s] Only 2 frames in 5s, sending keepalives
+  [30.6s] Only 2 frames in 5s, sending keepalives
+
+Total: 2 frames
+f1 types: {54: 1, 1: 1}

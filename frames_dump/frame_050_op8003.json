@@ -1,0 +1,11 @@
+{
+  "index": 50,
+  "opcode": 8003,
+  "encrypted_size": 24,
+  "decrypted_size": 24,
+  "timestamp_raw": 2227955720,
+  "fields": {
+    "1": 8003,
+    "2": "08e8cb840110dab2d9c6f93320d4b8d9c6f933"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "seed_inits": [
+    {
+      "t": "seed_init",
+      "ch": 1,
+      "nonce": "0x12b37ec3",
+      "rsi": "0x12b37ec3",
+      "rdi": "0x0099bb9f",
+      "rax": "0x0099bb9f"
+    },
+    {
+      "t": "seed_init",
+      "ch": 2,
+      "nonce": "0x0099bb9f",
+      "rsi": "0x12b37ec3",
+      "rdi": "0x0099bb9f",
+      "rax": "0x42cfd205"
+    }
+  ]
+}

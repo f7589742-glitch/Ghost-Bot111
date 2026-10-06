@@ -1,0 +1,21 @@
+=== FRAME FORMAT DEBUG ===
+TX: 550B wire (548B encrypted)
+[0] RAW (6B): 0004cd77659c
+  byte[0]=0x00
+  as [len:2]=4
+  decrypt([0:]=0004cd77659c...) = c545baebab76
+  decrypt([1:]=04cd77659c...) = 272f3467b0
+  decrypt([2:]=cd77659c...) = 58e2c177
+  decrypt([3:]=77659c...) = 78e293
+  FrameParser frames: 1
+  Frame: len=4 payload=cd77659c
+[1] RAW (11B): 0009c6eb31e74b0c3c6494
+  byte[0]=0x00
+  as [len:2]=9
+  decrypt([0:]=0009c6eb31e74b0c3c64...) = 6bb975628cbf6c0f606da4
+  decrypt([1:]=09c6eb31e74b0c3c6494...) = 9dd1529e0b420540d035
+  decrypt([2:]=c6eb31e74b0c3c6494...) = 108ffa816a8a4b651e
+  decrypt([3:]=eb31e74b0c3c6494...) = 1134e94516b5a53e
+  FrameParser frames: 1
+  Frame: len=9 payload=c6eb31e74b0c3c6494
+[2] timeout

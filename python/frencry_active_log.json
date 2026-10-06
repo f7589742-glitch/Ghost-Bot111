@@ -1,0 +1,14 @@
+[
+  {
+    "msg": "ws2_32 hook failed: TypeError: not a function",
+    "_ts": 1783802682444,
+    "_type": "info",
+    "_ts_rel": 8.738
+  },
+  {
+    "msg": "All hooks ready. Waiting for game...",
+    "_ts": 1783802682444,
+    "_type": "ready",
+    "_ts_rel": 8.739
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "commands": {
+    "train_infantry": {
+      "msg_id": 300,
+      "payload_hex": "",
+      "category": "training",
+      "description": "Train infantry at barracks (opcode 300)",
+      "builder": "train_troops"
+    },
+    "train_cavalry": {
+      "msg_id": 300,
+      "payload_hex": "",
+      "category": "training",
+      "description": "Train cavalry at stable (opcode 300)",
+      "builder": "train_troops"
+    },
+    "train_archer": {
+      "msg_id": 300,
+      "payload_hex": "",
+      "category": "training",
+      "description": "Train archer at archery range (opcode 300)",
+      "builder": "train_troops"
+    },
+    "train_siege": {
+      "msg_id": 300,
+      "payload_hex": "",
+      "category": "training",
+      "description": "Train siege at workshop (opcode 300)",
+      "builder": "train_troops"
+    }
+  }
+}
+

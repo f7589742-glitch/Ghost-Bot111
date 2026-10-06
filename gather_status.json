@@ -1,0 +1,39 @@
+{
+  "active_marches_count": 4,
+  "total_city_troops": 520922,
+  "marches": [
+    {
+      "cmd_id": 15,
+      "sec_cmd_id": 0,
+      "cmd_name": "Joan of Arc",
+      "type": "resource",
+      "target": "Tile #m_15",
+      "status": "Gathering"
+    },
+    {
+      "cmd_id": 38,
+      "sec_cmd_id": 0,
+      "cmd_name": "Sarka",
+      "type": "resource",
+      "target": "Tile #m_38",
+      "status": "Gathering"
+    },
+    {
+      "cmd_id": 33,
+      "sec_cmd_id": 0,
+      "cmd_name": "Constance",
+      "type": "resource",
+      "target": "Tile #m_33",
+      "status": "Gathering"
+    },
+    {
+      "cmd_id": 34,
+      "sec_cmd_id": 0,
+      "cmd_name": "Gaius Marius",
+      "type": "resource",
+      "target": "Tile #m_34",
+      "status": "Gathering"
+    }
+  ],
+  "last_update": "2026-09-15 09:49:57"
+}

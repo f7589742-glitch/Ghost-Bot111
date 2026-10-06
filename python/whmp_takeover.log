@@ -1,0 +1,67 @@
+=== WHMP TAKEOVER ===
+MASS.exe PID: 19788
+Attaching Frida...
+
+=== MEMORY SCAN RESULTS ===
+  Session key NOT found in memory (strange)
+Current WHMP connection: ('192.168.0.103', 56540, '43.175.228.94', 8080)
+
+Monitoring WHMP traffic for 15 seconds to capture current registration/heartbeat...
+
+>>> Killing WHMP connection 192.168.0.103:56540 -> 43.175.228.94:8080
+SetTcpEntry result: 0
+Monitoring for 35 seconds to capture WHMP re-registration...
+  ... 10s
+[19:27:45.076] >>> WHMP SEND fd=9932 (282B)
+[19:27:45.310] <<< WHMP RECV fd=9932 (42B)
+[19:27:45.326] >>> WHMP SEND fd=9932 (62B)
+[19:27:45.493] >>> WHMP SEND fd=9932 (30B)
+[19:27:45.559] <<< WHMP RECV fd=9932 (338B)
+[19:27:45.576] <<< WHMP RECV fd=9932 (659B)
+[19:27:45.759] <<< WHMP RECV fd=9932 (10881B)
+[19:27:45.783] >>> WHMP SEND fd=9932 (197B)
+[19:27:45.809] >>> WHMP SEND fd=9932 (39B)
+[19:27:45.976] >>> WHMP SEND fd=9932 (44B)
+[19:27:46.009] <<< WHMP RECV fd=9932 (50B)
+[19:27:46.026] <<< WHMP RECV fd=9932 (2177B)
+[19:27:46.126] >>> WHMP SEND fd=9932 (41B)
+[19:27:46.159] <<< WHMP RECV fd=9932 (6881B)
+[19:27:46.243] <<< WHMP RECV fd=9932 (4571B)
+[19:27:46.293] >>> WHMP SEND fd=9932 (43B)
+[19:27:46.376] <<< WHMP RECV fd=9932 (3932B)
+[19:27:46.459] >>> WHMP SEND fd=9932 (37B)
+[19:27:46.526] <<< WHMP RECV fd=9932 (2103B)
+[19:27:46.610] >>> WHMP SEND fd=9932 (41B)
+[19:27:46.693] <<< WHMP RECV fd=9932 (876B)
+[19:27:46.776] >>> WHMP SEND fd=9932 (37B)
+[19:27:46.843] <<< WHMP RECV fd=9932 (6238B)
+[19:27:46.926] >>> WHMP SEND fd=9932 (37B)
+[19:27:47.009] >>> WHMP SEND fd=9932 (55B)
+[19:27:47.026] <<< WHMP RECV fd=9932 (1116B)
+[19:27:47.093] >>> WHMP SEND fd=9932 (37B)
+[19:27:47.159] <<< WHMP RECV fd=9932 (426B)
+[19:27:47.243] <<< WHMP RECV fd=9932 (943B)
+[19:27:47.259] >>> WHMP SEND fd=9932 (107B)
+[19:27:47.376] <<< WHMP RECV fd=9932 (909B)
+[19:27:47.409] >>> WHMP SEND fd=9932 (107B)
+[19:27:47.426] >>> WHMP SEND fd=9932 (37B)
+[19:27:47.510] <<< WHMP RECV fd=9932 (2119B)
+[19:27:47.576] >>> WHMP SEND fd=9932 (107B)
+[19:27:47.643] <<< WHMP RECV fd=9932 (1767B)
+[19:27:47.726] >>> WHMP SEND fd=9932 (79B)
+[19:27:47.743] <<< WHMP RECV fd=9932 (455B)
+[19:27:47.859] >>> WHMP SEND fd=9932 (37B)
+[19:27:47.876] <<< WHMP RECV fd=9932 (1883B)
+[19:27:47.976] <<< WHMP RECV fd=9932 (1060B)
+[19:27:48.093] <<< WHMP RECV fd=9932 (1386B)
+[19:27:48.276] >>> WHMP SEND fd=9932 (37B)
+[19:27:48.509] <<< WHMP RECV fd=9932 (951B)
+[19:27:48.693] >>> WHMP SEND fd=9932 (37B)
+[19:27:48.926] <<< WHMP RECV fd=9932 (968B)
+[19:27:49.109] >>> WHMP SEND fd=9932 (33B)
+[19:27:49.343] <<< WHMP RECV fd=9932 (33B)
+  ... 20s
+  Game reconnected WHMP: ('10.8.0.9', 60070, '43.175.228.94', 8080)
+  ... 30s
+  Game reconnected WHMP: ('10.8.0.9', 60070, '43.175.228.94', 8080)
+=== Takeover complete ===

@@ -1,0 +1,183 @@
+{
+  "accounts": [
+    {
+      "email": "farner2231+1@hotmail.com",
+      "governors": [
+        {
+          "city_hall": "CH18",
+          "enabled": true,
+          "id": "227658377",
+          "kingdom": "4105",
+          "last_run": "just now",
+          "name": "[QPSS]AmmAr",
+          "next_run": "in 3h"
+        },
+        {
+          "city_hall": "CH16",
+          "enabled": true,
+          "id": "227652418",
+          "kingdom": "4105",
+          "last_run": "just now",
+          "name": "[QPSS]ssar3",
+          "next_run": "in 3h"
+        }
+      ],
+      "last_run": "just now"
+    }
+  ],
+  "city": {
+    "collect_resources": true,
+    "produce_blacksmith": false,
+    "train_infantry": "T1",
+    "train_cavalry": "T1",
+    "train_archers": "T1",
+    "train_siege": "T1",
+    "battle_training_mode": "Off"
+  },
+  "gathering": {
+    "food_marches": 1,
+    "wood_marches": 1,
+    "stone_marches": 1,
+    "gold_marches": 0,
+    "max_node_level": "No cap",
+    "only_finishable": true,
+    "skip_partially_gathered": true
+  },
+  "general": {
+    "bot_id": 1196,
+    "bot_user": "[QPSS]AmmAr",
+    "character_slots_total": 18,
+    "character_slots_used": 18,
+    "license_expires": "9/15/2026, 8:15:04 PM",
+    "license_percent": 68,
+    "license_plan": "Basic plan · 18 characters",
+    "license_time_left": "7d 20h 29m 45s left",
+    "loop_interval_hours": 3
+  },
+  "inventory": {
+    "characters": [
+      {
+        "city_hall": "CH17",
+        "food": "38.05M",
+        "gold": "3.50M",
+        "id": "231469447",
+        "kingdom": "4150",
+        "name": "KD RSS0",
+        "power": "1.16M",
+        "stone": "22.60M",
+        "total": "104.72M",
+        "wood": "40.57M"
+      },
+      {
+        "city_hall": "CH17",
+        "food": "27.57M",
+        "gold": "3.88M",
+        "id": "231479877",
+        "kingdom": "4150",
+        "name": "20 KD",
+        "power": "1.10M",
+        "stone": "14.97M",
+        "total": "78.15M",
+        "wood": "31.74M"
+      },
+      {
+        "city_hall": "CH17",
+        "food": "24.10M",
+        "gold": "1.73M",
+        "id": "231472872",
+        "kingdom": "4150",
+        "name": "15 KD",
+        "power": "1.01M",
+        "stone": "5.74M",
+        "total": "61.11M",
+        "wood": "29.54M"
+      },
+      {
+        "city_hall": "CH17",
+        "food": "25.34M",
+        "gold": "2.16M",
+        "id": "231478037",
+        "kingdom": "4150",
+        "name": "17 KD",
+        "power": "878.3K",
+        "stone": "3.67M",
+        "total": "56.89M",
+        "wood": "25.72M"
+      },
+      {
+        "city_hall": "CH17",
+        "food": "27.60M",
+        "gold": "2.35M",
+        "id": "231474607",
+        "kingdom": "4150",
+        "name": "16 KD",
+        "power": "880.2K",
+        "stone": "4.65M",
+        "total": "47.08M",
+        "wood": "12.49M"
+      }
+    ],
+    "cycles_completed": 522,
+    "gathered": {
+      "food": {
+        "amount": "443.57M",
+        "change": "+64% vs prev",
+        "history": [
+          20,
+          35,
+          45,
+          30,
+          65,
+          80,
+          100
+        ]
+      },
+      "gold": {
+        "amount": "56.47M",
+        "change": "+428% vs prev",
+        "history": [
+          5,
+          10,
+          8,
+          15,
+          25,
+          40,
+          85
+        ]
+      },
+      "stone": {
+        "amount": "287.30M",
+        "change": "+75% vs prev",
+        "history": [
+          15,
+          25,
+          35,
+          20,
+          70,
+          60,
+          90
+        ]
+      },
+      "wood": {
+        "amount": "363.56M",
+        "change": "+17% vs prev",
+        "history": [
+          25,
+          20,
+          30,
+          40,
+          50,
+          45,
+          95
+        ]
+      }
+    },
+    "in_cities": {
+      "food": "320.30M",
+      "gold": "37.22M",
+      "stone": "120.88M",
+      "wood": "296.27M"
+    },
+    "window": "7 days"
+  }
+}

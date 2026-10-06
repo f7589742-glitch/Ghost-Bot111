@@ -1,0 +1,151 @@
+{
+  "messages": [
+    {
+      "tag": "nav",
+      "text": "Navigating to Google OAuth URL..."
+    },
+    {
+      "tag": "request",
+      "text": "GET https://accounts.google.com/o/oauth2/v2/auth?client_id=722388396771-refmclnb9v35c8gu406p30rjhqj6balf.apps.googleusercontent.com&redirect_uri=https://app.lilithgame.com/resource/google_success_redirect.html&response_type=code&scope=openid+email+profile&access_type=offline&prompt=consent"
+    },
+    {
+      "tag": "request",
+      "text": "GET https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSBlc3RhIGFwcCBwb3JxdWUgbm8gY3VtcGxlIGNvbiBsYSBwb2zDrXRpY2EgT0F1dGjCoDIuMCBkZSBHb29nbGUuCgpTaSBlcmVzIGVsIGRlc2Fycm9sbGFkb3IgZGUgbGEgYXBwLCByZWdpc3RyYSBlbCBVUkkgZGUgcmVkaXJlY2Npb25"
+    },
+    {
+      "tag": "console",
+      "text": "[info] Slow network is detected. See https://www.chromestatus.com/feature/5636954674692096 for more details. Fallback font will be used while loading: https://fonts.gstatic.com/s/googlesans/v62/4UaRrENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iq2vgCI.woff2"
+    },
+    {
+      "tag": "request",
+      "text": "GET https://fonts.gstatic.com/s/googlesans/v62/4UaRrENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iq2vgCI.woff2"
+    },
+    {
+      "tag": "console",
+      "text": "[log] %c%s color: red; background: yellow; font-size: 24px; WARNING!"
+    },
+    {
+      "tag": "console",
+      "text": "[log] %c%s font-size: 18px; Using this console may allow attackers to impersonate you and steal your information using an attack called Self-XSS.\nDo not enter or paste code that you do not understand."
+    },
+    {
+      "tag": "request",
+      "text": "POST https://play.google.com/log?format=json&hasfast=true&authuser=0"
+    },
+    {
+      "tag": "google",
+      "text": "Google login is in main page (not popup)"
+    },
+    {
+      "tag": "request",
+      "text": "POST https://accounts.google.com/_/OAuthUi/browserinfo?f.sid=-5286842200803162784&bl=boq_identity-oauth-http_20260707.01_p0&hl=en-US&soc-app=1&soc-platform=1&soc-device=1&_reqid=58188&rt=j"
+    },
+    {
+      "tag": "request",
+      "text": "POST https://play.google.com/log?format=json&hasfast=true&authuser=0"
+    },
+    {
+      "tag": "google",
+      "text": "Error on main: Page.wait_for_selector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator(\"#identifierId\") to be visible\n"
+    },
+    {
+      "tag": "wait",
+      "text": "Waiting up to 120s for auth result..."
+    },
+    {
+      "tag": "status",
+      "text": "[0s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[10s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[20s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[30s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[40s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[50s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "request",
+      "text": "POST https://accounts.google.com/_/OAuthUi/browserinfo?f.sid=-5286842200803162784&bl=boq_identity-oauth-http_20260707.01_p0&hl=en-US&soc-app=1&soc-platform=1&soc-device=1&_reqid=158188&rt=j"
+    },
+    {
+      "tag": "status",
+      "text": "[60s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[70s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[80s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[90s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "status",
+      "text": "[100s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    },
+    {
+      "tag": "request",
+      "text": "GET https://accounts.google.com/_/OAuthUi/gen204/?tmambps=0.00015870685616117445&rtembps=-1&rttms=316&ct=undefined"
+    },
+    {
+      "tag": "status",
+      "text": "[110s] URL: https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSB"
+    }
+  ],
+  "api": [
+    {
+      "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=722388396771-refmclnb9v35c8gu406p30rjhqj6balf.apps.googleusercontent.com&redirect_uri=https://app.lilithgame.com/resource/google_success_redirect.html&response_type=code&scope=openid+email+profile&access_type=offline&prompt=consent",
+      "method": "GET"
+    },
+    {
+      "url": "https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSvgEKTm8gcHVlZGVzIGFjY2VkZXIgYSBlc3RhIGFwcCBwb3JxdWUgbm8gY3VtcGxlIGNvbiBsYSBwb2zDrXRpY2EgT0F1dGjCoDIuMCBkZSBHb29nbGUuCgpTaSBlcmVzIGVsIGRlc2Fycm9sbGFkb3IgZGUgbGEgYXBwLCByZWdpc3RyYSBlbCBVUkkgZGUgcmVkaXJlY2Npb25hbWllbnRvIGVuIEdvb2dsZcKgQ2xvdWTCoENvbnNvbGUuCiAgGm1odHRwczovL2RldmVsb3BlcnMuZ29vZ2xlLmNvbS9pZGVudGl0eS9wcm90b2NvbHMvb2F1dGgyL3dlYi1zZXJ2ZXIjYXV0aG9yaXphdGlvbi1lcnJvcnMtcmVkaXJlY3QtdXJpLW1pc21hdGNoIJADKlAKDHJlZGlyZWN0X3VyaRJAaHR0cHM6Ly9hcHAubGlsaXRoZ2FtZS5jb20vcmVzb3VyY2UvZ29vZ2xlX3N1Y2Nlc3NfcmVkaXJlY3QuaHRtbDKyAggBEr4BCk5vIHB1ZWRlcyBhY2NlZGVyIGEgZXN0YSBhcHAgcG9ycXVlIG5vIGN1bXBsZSBjb24gbGEgcG9sw610aWNhIE9BdXRowqAyLjAgZGUgR29vZ2xlLgoKU2kgZXJlcyBlbCBkZXNhcnJvbGxhZG9yIGRlIGxhIGFwcCwgcmVnaXN0cmEgZWwgVVJJIGRlIHJlZGlyZWNjaW9uYW1pZW50byBlbiBHb29nbGXCoENsb3VkwqBDb25zb2xlLgogIBptaHR0cHM6Ly9kZXZlbG9wZXJzLmdvb2dsZS5jb20vaWRlbnRpdHkvcHJvdG9jb2xzL29hdXRoMi93ZWItc2VydmVyI2F1dGhvcml6YXRpb24tZXJyb3JzLXJlZGlyZWN0LXVyaS1taXNtYXRjaA&flowName=GeneralOAuthFlow&client_id=722388396771-refmclnb9v35c8gu406p30rjhqj6balf.apps.googleusercontent.com&aes=AbzcAbFQc_EoedtjA4LTnkkHvUNA",
+      "method": "GET"
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/googlesans/v62/4UaRrENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iq2vgCI.woff2",
+      "method": "GET"
+    },
+    {
+      "url": "https://play.google.com/log?format=json&hasfast=true&authuser=0",
+      "method": "POST",
+      "post_data": "[[1,null,null,null,null,null,null,null,null,null,[null,null,null,null,\"en-US\",null,\"boq_identity-oauth-http_20260707.01_p0\",null,null,[4,0]]],1022,[[1783948184499,null,null,null,null,null,null,null,null,null,null,null,null,null,-10800,null,null,null,null,null,1,null,null,\"[[[1783948184498568,0,0],1],[[273571,{\\\"618\\\":[[1783948184498]]}]],null,null,null,null,null,null,[[[1783948184498568,0,0],1]]]\"]],1783948184499,null,null,null,null,null,null,null,null,null,null,null,null,null,[[null,[null,null,"
+    },
+    {
+      "url": "https://accounts.google.com/_/OAuthUi/browserinfo?f.sid=-5286842200803162784&bl=boq_identity-oauth-http_20260707.01_p0&hl=en-US&soc-app=1&soc-platform=1&soc-device=1&_reqid=58188&rt=j",
+      "method": "POST",
+      "post_data": "f.req=%5B9%2C1%2C1%2C%5Bnull%2C800%2C1280%5D%2C%5Bnull%2C800%2C1280%5D%2C%5B1%2C1%2Cnull%2C1%5D%2C%5B0%2C0%2C0%5D%5D&at=AI91znlj4jGG2QxIAP4Jtpcx421V%3A1783948181760&"
+    },
+    {
+      "url": "https://play.google.com/log?format=json&hasfast=true&authuser=0",
+      "method": "POST",
+      "post_data": "[[1,null,null,null,null,null,null,null,null,null,[null,null,null,null,\"en-US\",null,null,null,[[[\"Chromium\",\"149\"],[\"Not)A;Brand\",\"24\"]],0,\"Windows\",\"10.0.0\",\"x86\",\"\",\"149.0.7827.55\"],[4,0]]],558,[[1783948184000,null,null,null,null,null,null,\"[[null,[1,\\\"accounts.google.com/signin/oauth/error\\\",null,[\\\"\\\"],0]],\\\"-5286842200803162784\\\",3,[null,\\\"S1595803216:1783948181738296\\\"]]\",null,null,null,null,null,null,-10800,null,null,null,null,null,1],[1783948184000,null,null,null,null,null,null,\"[[[307,64"
+    },
+    {
+      "url": "https://accounts.google.com/_/OAuthUi/browserinfo?f.sid=-5286842200803162784&bl=boq_identity-oauth-http_20260707.01_p0&hl=en-US&soc-app=1&soc-platform=1&soc-device=1&_reqid=158188&rt=j",
+      "method": "POST",
+      "post_data": "f.req=%5B9%2C1%2C1%2C%5Bnull%2C800%2C1280%5D%2C%5Bnull%2C800%2C1280%5D%2C%5B1%2C1%2Cnull%2C1%5D%2C%5B1%2C1%2C1%5D%5D&at=AI91znlj4jGG2QxIAP4Jtpcx421V%3A1783948181760&"
+    },
+    {
+      "url": "https://accounts.google.com/_/OAuthUi/gen204/?tmambps=0.00015870685616117445&rtembps=-1&rttms=316&ct=undefined",
+      "method": "GET"
+    }
+  ],
+  "tokens": []
+}

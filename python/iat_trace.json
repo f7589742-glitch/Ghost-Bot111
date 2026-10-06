@@ -1,0 +1,573 @@
+[
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b845",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b859",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b86d",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b883",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b899",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b8ad",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b8c0",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b8d4",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0x1",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a138",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x7ffe6982c0e5",
+   "0xb2439ef980",
+   "0x0"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf411a",
+  "args": [
+   "0x0",
+   "0x0",
+   "0xb2439efb08"
+  ]
+ },
+ {
+  "type": "iat_hook",
+  "name": "IAT_0xf3cc6",
+  "args": [
+   "0x27ba984a170",
+   "0x12b8e9",
+   "0x7ffe0008"
+  ]
+ },
+ {
+  "type": "ucrt_write",
+  "func": "fwrite",
+  "fd": -1457848832,
+  "len": 390,
+  "hex": "",
+  "backtrace": [
+   "EngineDll.dll+0x3cf38",
+   "EngineDll.dll+0x3dd82",
+   "EngineDll.dll+0x26284",
+   "EngineDll.dll+0x2486b",
+   "EngineDll.dll+0x283e5",
+   "EngineDll.dll+0x9d604",
+   "EngineDll.dll+0xc76d5",
+   "EngineDll.dll+0xe44b8",
+   "EngineDll.dll+0xc78c6",
+   "EngineDll.dll+0xc6d91"
+  ]
+ },
+ {
+  "type": "ucrt_write",
+  "func": "fwrite",
+  "fd": 957273088,
+  "len": 127,
+  "hex": "",
+  "backtrace": [
+   "EngineDll.dll+0x3cf38",
+   "EngineDll.dll+0x3dd82",
+   "EngineDll.dll+0x26284",
+   "EngineDll.dll+0x2486b",
+   "EngineDll.dll+0x283e5",
+   "EngineDll.dll+0x9d604",
+   "EngineDll.dll+0xc76d5",
+   "EngineDll.dll+0xe44b8",
+   "EngineDll.dll+0xc78c6",
+   "EngineDll.dll+0xc6d91"
+  ]
+ },
+ {
+  "type": "ws2_send",
+  "func": "send",
+  "sock": 3196,
+  "len": 229,
+  "hex": "00e30228ac18ff3a121043888f22b0dbdbac63103a1e194edef27820dd157f12",
+  "backtrace": [
+   "EngineDll.dll+0x1662a",
+   "EngineDll.dll+0x164ff",
+   "EngineDll.dll+0x1592d",
+   "EngineDll.dll+0xffcba",
+   "ucrtbase.dll+0x21bb2",
+   "KERNEL32.DLL+0x17374",
+   "ntdll.dll+0x4cc91"
+  ]
+ },
+ {
+  "type": "ws2_send",
+  "func": "send",
+  "sock": 3196,
+  "len": 68,
+  "hex": "0042a2bf592bd951c167fd076ca5968d743221a8eaffe3fb24270bc851b565d7",
+  "backtrace": [
+   "EngineDll.dll+0x1662a",
+   "EngineDll.dll+0x164ff",
+   "EngineDll.dll+0x1592d",
+   "EngineDll.dll+0xffcba",
+   "ucrtbase.dll+0x21bb2",
+   "KERNEL32.DLL+0x17374",
+   "ntdll.dll+0x4cc91"
+  ]
+ },
+ {
+  "type": "ws2_send",
+  "func": "send",
+  "sock": 3196,
+  "len": 6,
+  "hex": "000497ade226",
+  "backtrace": [
+   "EngineDll.dll+0x1662a",
+   "EngineDll.dll+0x164ff",
+   "EngineDll.dll+0x1592d",
+   "EngineDll.dll+0xffcba",
+   "ucrtbase.dll+0x21bb2",
+   "KERNEL32.DLL+0x17374",
+   "ntdll.dll+0x4cc91"
+  ]
+ },
+ {
+  "type": "ucrt_write",
+  "func": "_write",
+  "fd": 5,
+  "len": 517,
+  "hex": "5b323032362d30372d31322030383a31393a31302e3733375d205b6c675f6c6f",
+  "backtrace": [
+   "ucrtbase.dll+0x178f7",
+   "ucrtbase.dll+0x1ac33",
+   "ucrtbase.dll+0x1ac92",
+   "ucrtbase.dll+0x1903e",
+   "EngineDll.dll+0x2759e",
+   "EngineDll.dll+0x3dde7",
+   "EngineDll.dll+0x2633d",
+   "EngineDll.dll+0x409fc",
+   "EngineDll.dll+0x45be1",
+   "ucrtbase.dll+0x21bb2"
+  ]
+ },
+ {
+  "type": "ws2_send",
+  "func": "send",
+  "sock": 3196,
+  "len": 80,
+  "hex": "0004a380f4fc00482abd11db5aa575ae583402fd70ddc677dad3b0462012c77c",
+  "backtrace": [
+   "EngineDll.dll+0x1662a",
+   "EngineDll.dll+0x164ff",
+   "EngineDll.dll+0x1592d",
+   "EngineDll.dll+0xffcba",
+   "ucrtbase.dll+0x21bb2",
+   "KERNEL32.DLL+0x17374",
+   "ntdll.dll+0x4cc91"
+  ]
+ }
+]

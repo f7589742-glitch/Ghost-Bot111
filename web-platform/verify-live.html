@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>أي مشروع Supabase نستخدمه؟ — الدليل بالأدلة الحية</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0c12; color: #e4e4e7; font-family: "Segoe UI", Tahoma, sans-serif; padding: 28px; line-height: 1.8; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { color: #fff; font-size: 26px; margin-bottom: 4px; }
+  .sub { color: #a1a1aa; font-size: 14px; margin-bottom: 24px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .ok { background: rgba(16,185,129,.15); color: #34d399; border: 1px solid rgba(16,185,129,.4); }
+  .dead { background: rgba(244,63,94,.15); color: #fb7185; border: 1px solid rgba(244,63,94,.4); }
+  .card { background: #10131c; border: 1px solid #232733; border-radius: 14px; padding: 20px 22px; margin-bottom: 18px; }
+  .card h2 { color: #fff; font-size: 17px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+  .mono { font-family: Consolas, monospace; direction: ltr; unicode-bidi: embed; background: #0a0c12; border: 1px solid #232733; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #9ceebc; overflow-x: auto; white-space: pre; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 0; }
+  .pill { background: #161a26; border: 1px solid #2a2f3d; border-radius: 10px; padding: 8px 14px; font-size: 13px; }
+  .pill b { color: #fff; }
+  .new { color: #34d399; font-weight: 700; }
+  .old { color: #fb7185; font-weight: 700; }
+  .diagram { background: #0d101a; border: 1px dashed #2a2f3d; border-radius: 12px; padding: 18px; margin-top: 12px; direction: ltr; font-family: Consolas, monospace; font-size: 13px; color: #93c5fd; white-space: pre; overflow-x: auto; }
+  .note { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.3); color: #fcd34d; border-radius: 10px; padding: 12px 16px; font-size: 13.5px; margin-top: 10px; }
+  ul { margin: 8px 24px 0 0; font-size: 14px; }
+  li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>أي مشروع Supabase نستخدمه؟ 🧭</h1>
+  <div class="sub">الأدلة الحية مأخوذة من فحص الموقع المنشور فعلياً (live) وملفات مشروعك — بتاريخ اليوم</div>
+
+  <div class="card">
+    <h2><span class="badge ok">متصِل الآن</span> المشروع الجديد — والموقع يعمل عليه</h2>
+    <div class="row">
+      <div class="pill">الاسم: <b>gvkgqvwasupnepnidnnk</b></div>
+      <div class="pill">اللوحة: <b>supabase.com/dashboard/project/gvkgqvwasupnepnidnnk</b></div>
+    </div>
+    <div class="mono">URL        = https://gvkgqvwasupnepnidnnk.supabase.co
+ANON_KEY   = sb_publishable_1hfGOLMpQVWeyEh65UCvjw_...</div>
+    <div class="row">
+      <div class="pill">✓ Vercel env (production)</div>
+      <div class="pill">✓ .env.local عندك</div>
+      <div class="pill">✓ .env عندك</div>
+      <div class="pill">✓ Discord مفعّل فيه</div>
+      <div class="pill">⚠ الجداول: <b>لم تُنشأ بعد</b> — شغّل ملف 002 SQL</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge dead">مفصول نهائياً</span> المشروع القديم — لم يبقَ له أي أثر</h2>
+    <div class="row">
+      <div class="pill">الاسم: <b class="old">ljyneszcsexcepztgprs</b></div>
+      <div class="pill">كان سبب فشل تسجيل الدخول (Unable to exchange external code)</div>
+    </div>
+    <ul>
+      <li>فحص حزمة <b>zero-bot-orpin.vercel.app</b> الحية: صفر إشارات له ✓</li>
+      <li>حُذف من: Vercel env + .env.local + .env + كود المصدر + كاش البناء</li>
+      <li>حسابات المستأجر القديم المرتبطة به (15) حُذفت من خادم EC2 أيضاً</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>🧩 الصورة الكاملة — من يكلم من؟</h2>
+    <div class="diagram">
+ [ متصفحك ]
+     │  يفتح  https://zero-bot-orpin.vercel.app  ← (Vercel: يستضيف الواجهة)
+     ▼
+ [ Next.js على Vercel ]
+     │
+     ├── تسجيل الدخول (Discord OAuth) ────────► [ Supabase الجديد ]  ✓ هو المتحكم بالحسابات
+     │                                            gvkgqvwasupnepnidnnk
+     │
+     ├── جداول البوتات/الحسابات/الإعلانات ────► [ نفس المشروع الجديد ] (بعد تشغيل 002 SQL)
+     │
+     └── /api/backend/* (أوامر البوت) ─────────► [ خادم EC2: 16.171.9.216 ]
+                                                  FastAPI + مصفّر الحسابات القديمة
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>✅ كيف تحققت (أدلة حية، ليس كلاماً)</h2>
+    <ul>
+      <li>نزّلت حزم JS من <span class="mono" style="display:inline;padding:0 6px">zero-bot-orpin.vercel.app/login</span> وفحصتها: فيها <b>https://gvkgqvwasupnepnidnnk.supabase.co</b> حرفياً — و<b>صفر</b> إشارات للقديم.</li>
+      <li>استدعيت Vercel API بمفاتيحك: القيم المنتجة في المشروع <b>zero-bot</b> هي الجديدة.</li>
+      <li>نفّذت DELETE على 15 حساباً من EC2 بـ API الخادم ثم استدعيت /api/accounts → <b>0</b> متبقٍ.</li>
+      <li>استدعيت /auth/v1/settings للمشروع الجديد → <b>discord: true</b>.</li>
+    </ul>
+    <div class="note">⚠ آخر خطوة متبقية عليك: شغّل ملف <b>web-platform/supabase/migrations/002_new_project_full_schema.sql</b> في لوحة المشروع الجديد (SQL Editor)، وأضف <span class="mono" style="display:inline;padding:0 6px">https://zero-bot-orpin.vercel.app/**</span> في Discord Developer Portal → OAuth2 → Redirects. بعدها كل شيء يعمل 100%.</div>
+  </div>
+</div>
+</body>
+</html>

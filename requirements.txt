@@ -1,0 +1,9 @@
+aiohttp>=3.9.0
+pycryptodome>=3.20.0
+python-socks>=2.4.0
+frida>=16.0.0
+requests>=2.31.0
+wmi>=1.5.1
+dpkt>=1.9.2
+pydivert>=2.1.0
+psutil>=5.9.0

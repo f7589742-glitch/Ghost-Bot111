@@ -1,0 +1,50 @@
+{
+  "greeting": null,
+  "seeds": [],
+  "flow": [
+    {
+      "t": "msg",
+      "msg": "base=0x7ff90a1a0000"
+    },
+    {
+      "t": "msg",
+      "msg": "WS2_32=0x7ff960be0000"
+    },
+    {
+      "t": "msg",
+      "msg": "findExportByName failed: not a function"
+    },
+    {
+      "t": "msg",
+      "msg": "recv=null"
+    },
+    {
+      "t": "msg",
+      "msg": "recv via enum=0x7ff960bf1d90"
+    },
+    {
+      "t": "msg",
+      "msg": "seed_init hook OK"
+    },
+    {
+      "t": "msg",
+      "msg": "func_63590 hook OK"
+    },
+    {
+      "t": "msg",
+      "msg": "@6370c hook OK"
+    },
+    {
+      "t": "msg",
+      "msg": "recv hook OK"
+    },
+    {
+      "t": "msg",
+      "msg": "TOTAL HOOKS: 4/4"
+    },
+    {
+      "t": "msg",
+      "msg": "READY"
+    }
+  ]
+}

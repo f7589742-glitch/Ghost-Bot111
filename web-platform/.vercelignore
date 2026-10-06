@@ -1,0 +1,138 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Next.js
+.next/
+out/
+build/
+
+# Production
+dist/
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Temp files
+*.tmp
+*.temp
+*.bak
+.tmp.driveupload/
+
+# Backup files
+*_backup*
+*_bak*
+
+# Untracked project files
+backups/
+.tmp.driveupload/
+scratch/
+*.pyc
+*.pyo
+*.pyd
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Large files (media / archives only - preserve webp/png in public)
+*.mp4
+*.mov
+*.avi
+*.wmv
+*.flv
+*.mkv
+*.webm
+*.ogg
+*.mp3
+*.wav
+*.flac
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Config backups
+*.bak
+*.bak_*
+*.orig
+
+# Scripts
+*.bat
+*.sh
+*.ps1
+*.cmd
+
+# Documentation not needed for deployment
+README.md
+CHANGELOG.md
+LICENSE
+*.md
+
+# Test files
+test/
+tests/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Scripts not needed in production
+*.py
+*.lua
+*.sql
+
+# Config backups
+*.bak
+*.bak_*
+*.orig

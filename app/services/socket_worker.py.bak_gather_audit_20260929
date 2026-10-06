@@ -1,0 +1,1125 @@
+import os
+import sys
+import time
+import datetime
+import zlib
+import struct
+import asyncio
+import logging
+from typing import Optional, Dict, Any, List
+from app.services.activity_stream import activity_stream
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT_DIR, "python"))
+sys.path.insert(0, ROOT_DIR)
+
+from crypto_module import RokCrypto
+from headless_client import ProtobufCodec, FrameParser
+from rokbot.protocol import build_android_login_frame, build_login_frame, parse_greeting
+from rok_headless_bot import (
+    cmd_train_troops,
+    cmd_gather,
+    cmd_search_resource,
+    cmd_search_resource_type,
+    cmd_alliance_help,
+    cmd_alliance_info,
+    cmd_player_state,
+    cmd_resource_info,
+    cmd_keepalive
+)
+from app.models import AccountDAO, CharacterDAO, TaskLogDAO, CharacterSettingsDAO
+from app.services.lilith_cloud import LilithCloudService
+from app.services.training import (
+    CATEGORIES, UNIT_TYPE, capacity_for, read_barracks_state,
+    resolve_template, train_category,
+)
+
+logger = logging.getLogger("SocketWorker")
+
+def _collect_id_candidates(node: Any, out: List[int]):
+    """Recursively collects RoK-sized integer IDs (7-10 digits) from a decoded payload."""
+    if isinstance(node, dict):
+        for v in node.values():
+            _collect_id_candidates(v, out)
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            _collect_id_candidates(v, out)
+    elif isinstance(node, bool):
+        return
+    elif isinstance(node, int):
+        if 1_000_000 <= node <= 9_999_999_999:
+            out.append(node)
+    elif isinstance(node, str) and node.isdigit() and len(node) >= 7:
+        try:
+            out.append(int(node))
+        except ValueError:
+            pass
+    elif isinstance(node, bytes) and 4 <= len(node) <= 65536:
+        # Opcode 15 carries the whole profile as a nested protobuf blob
+        # (field 2, ~800B, field 1 inside = PlayerId). Decode and recurse.
+        try:
+            _collect_id_candidates(ProtobufCodec.decode_message(node), out)
+        except Exception:
+            pass
+
+class GameSocketWorker:
+    """
+    Asynchronous TCP Game Gateway worker for executing pure headless tasks.
+    Connects directly to rocgate.lilithgame.com:3101 using LFSR cipher.
+    """
+    @staticmethod
+    async def run_character_task(
+        task_id: str,
+        role_id: str,
+        task_type: str,
+        params: Optional[Dict[str, Any]] = None,
+        user_id: str = ""
+    ) -> Dict[str, Any]:
+        params = params or {}
+        char = None
+        if user_id:
+            from app.tenant_ctx import current_user_id
+            current_user_id.set(user_id)
+            char = CharacterDAO.get_by_role_id(role_id, user_id)
+        if not char:
+            char = CharacterDAO.get_by_role_id(role_id)
+            if char and user_id:
+                logger.info(f"Character {role_id} resolved via global lookup (requested user_id={user_id})")
+
+        if not char:
+            err = f"Character with role_id {role_id} not found in database."
+            TaskLogDAO.update_status(task_id, "FAILED", {"error": err})
+            return {"success": False, "error": err}
+
+        account = None
+        if user_id:
+            account = AccountDAO.get_by_id(char["account_id"], user_id)
+        if not account:
+            account = AccountDAO.get_by_id(char["account_id"])
+
+        if not account or not account.get("app_token"):
+            err = f"Account for character {role_id} has no valid session token."
+            TaskLogDAO.update_status(task_id, "FAILED", {"error": err})
+            return {"success": False, "error": err}
+
+        app_uid = account["app_uid"]
+        app_token = account["app_token"]
+        udid = account["udid"]
+        kingdom_id = char["kingdom_id"]
+
+        wire_logs = []
+        def log_wire(event: str, desc: str):
+            ts = time.strftime("%H:%M:%S")
+            entry = f"[{ts}] [{event}] {desc}"
+            wire_logs.append(entry)
+            logger.info(entry)
+
+        TaskLogDAO.update_status(task_id, "RUNNING", {"wire_logs": wire_logs, "step": "init"})
+
+        if task_type in ("gather", "smart_gather", "gathering"):
+            log_wire("INIT", f"Dispatching Smart Multi-March Gathering for {char['name']} (#{role_id})...")
+            gset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("gather") or {})
+            cset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("combat") or {})
+
+            # Preflight check: If Barbarian Combat is enabled, ALWAYS attack barbarians first so queues are empty and available!
+            if cset.get("barbs", False) and not params.get("skip_combat_preflight", False):
+                log_wire("COMBAT_PREFLIGHT", f"Barbarian combat is enabled: executing combat rounds FIRST so march queues are free for gathering...")
+                try:
+                    from app.services.combat_engine import CombatEngine
+                    hset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("hospital") or {})
+                    target_level = cset.get("min_barb_level") or 6
+                    highest_barb_level = cset.get("highest_barb_level") or cset.get("max_barb_level") or "L7"
+                    skip_barbs_below = cset.get("skip_barbs_below") or "None"
+                    primary_cmd = cset.get("primary_commander") or "Auto"
+                    secondary_cmd = cset.get("secondary_commander") or "Auto (best available)"
+                    combat_rounds = int(cset.get("combat_rounds") or 1)
+                    dispatch_all = bool(cset.get("dispatch_all_marches", True))
+                    heal_troops = bool(hset.get("heal_troops", True))
+                    heal_batch = int(hset.get("heal_batch", 0))
+
+                    target_char_pre = {
+                        "role_id": int(role_id),
+                        "kingdom_id": int(kingdom_id),
+                        "app_uid": str(account.get("app_uid") or ""),
+                        "app_token": str(account.get("app_token") or ""),
+                        "udid": str(account.get("udid") or ""),
+                        "name": char.get("name")
+                    }
+                    try:
+                        from cloud_role_switcher import ensure_character_active
+                        ensure_character_active(target_char_pre)
+                    except Exception as e_sw:
+                        log_wire("WARN", f"Preflight switch note: {e_sw}")
+
+                    try:
+                        from fleet_manager import resolve_login_bytes as _resolve_login
+                        _pre_login = _resolve_login(target_char_pre)
+                    except Exception:
+                        _pre_login = None
+
+                    gate_host, gate_port = LilithCloudService.resolve_gateway(str(account.get("app_uid") or ""), str(account.get("app_token") or ""), str(account.get("udid") or ""), int(kingdom_id))
+                    _hero_discovery_state: Dict[str, Any] = {}
+                    res_c = await CombatEngine.execute_barbarian_hunt(
+                        target_role_id=int(role_id),
+                        kingdom_id=int(kingdom_id),
+                        gate_host=gate_host,
+                        gate_port=gate_port,
+                        app_uid=str(account.get("app_uid") or ""),
+                        app_token=str(account.get("app_token") or ""),
+                        udid=str(account.get("udid") or ""),
+                        target_level=target_level,
+                        highest_barb_level=str(highest_barb_level),
+                        skip_barbs_below=str(skip_barbs_below),
+                        primary_commander=str(primary_cmd),
+                        secondary_commander=str(secondary_cmd),
+                        combat_rounds=combat_rounds,
+                        dispatch_all_marches=dispatch_all,
+                        heal_troops=heal_troops,
+                        heal_batch=heal_batch,
+                        char_name=str(char.get("name") or f"Governor #{role_id}"),
+                        login_bytes=_pre_login,
+                        alliance_id=int((char.get("alliance_id") or 0)),
+                        _hero_discovery_state=_hero_discovery_state,
+                        log_callback=lambda msg: log_wire("COMBAT", msg)
+                    )
+
+                    # Zero-config dynamic roster sync for the preflight pass as well.
+                    try:
+                        if _hero_discovery_state.get("roster"):
+                            from app.services.protocol.hero_parser import persist_roster_to_db as _persist
+                            _persist(
+                                role_id,
+                                _hero_discovery_state.get("roster") or [],
+                                set(_hero_state_g := _hero_discovery_state.get("garrison") or ()),
+                                source="socket_worker_preflight_1201",
+                            )
+                            log_wire("HERO_DISCOVERY", f"Preflight roster sync: {len(_hero_discovery_state.get('roster') or [])} heroes, garrison={sorted(_hero_state_g)}")
+                    except Exception as e_hsync:
+                        log_wire("WARN", f"Preflight hero roster sync note: {e_hsync}")
+                    log_wire("COMBAT_DONE", f"Barbarian hunt completed prior to gathering. Marches returned to city. Proceeding to gather...")
+                    await asyncio.sleep(3.0)
+                except Exception as e_c:
+                    log_wire("WARN", f"Pre-gathering barbarian hunt note: {e_c}")
+            
+            targets = params.get("targets")
+            if not targets:
+                m_cfg = gset.get("marches") if isinstance(gset.get("marches"), dict) else {}
+                if not m_cfg and any(f"{r}_marches" in gset for r in ("food", "wood", "stone", "gold")):
+                    m_cfg = {
+                        "food": int(gset.get("food_marches") or 0),
+                        "wood": int(gset.get("wood_marches") or 0),
+                        "stone": int(gset.get("stone_marches") or 0),
+                        "gold": int(gset.get("gold_marches") or 0),
+                    }
+                built = []
+                for r in ("food", "wood", "stone", "gold"):
+                    cnt = int(m_cfg.get(r, 0) or 0)
+                    built.extend([r] * cnt)
+                if built:
+                    targets = built
+            if not targets:
+                targets = ["food", "wood", "stone", "stone"]
+            city_pos = None
+            try:
+                _cx = params.get("city_x", gset.get("city_x"))
+                _cy = params.get("city_y", gset.get("city_y"))
+                if _cx is not None and _cy is not None and float(_cx) > 0 and float(_cy) > 0:
+                    city_pos = (float(_cx) * 6.0, float(_cy) * 6.0)
+            except Exception:
+                city_pos = None
+
+            try:
+                from fleet_manager import resolve_login_bytes as _resolve_login
+                _login_bytes = _resolve_login({
+                    "role_id": int(role_id),
+                    "app_token": account.get("app_token"),
+                    "app_uid": str(account.get("app_uid") or ""),
+                    "udid": str(account.get("udid") or ""),
+                    "kingdom_id": int(kingdom_id),
+                })
+            except Exception as e_login:
+                _login_bytes = None
+
+            # Resolve Max Node Level Cap (Strict Ceiling & Descending Fallback)
+            try:
+                from app.services.smart_gather_search import parse_max_node_level
+                _raw_level = (
+                    params.get("max_node_level") or params.get("max_level") or params.get("gather_max_level")
+                    if any(k in params for k in ("max_node_level", "max_level", "gather_max_level"))
+                    else (gset.get("max_node_level") or gset.get("max_level") or gset.get("gather_max_level"))
+                )
+                max_node_level = parse_max_node_level(_raw_level)
+            except Exception:
+                max_node_level = 6
+            gset["max_node_level"] = max_node_level
+
+            try:
+                from app.services.smart_gather_search import execute_smart_gather
+                success = await execute_smart_gather(
+                    march_targets=targets,
+                    target_level=max_node_level,
+                    level_mode="descending_fallback",
+                    max_node_level=max_node_level,
+                    role_id=int(role_id),
+                    kingdom_id=int(kingdom_id),
+                    city_pos=city_pos,
+                    only_finishable=False,
+                    skip_partially=bool(
+                        params.get("skip_partially") if params.get("skip_partially") is not None else
+                        params.get("skip_partially_gathered") if params.get("skip_partially_gathered") is not None else
+                        params.get("skip_partially_gathered_nodes") if params.get("skip_partially_gathered_nodes") is not None else
+                        params.get("skip_partially_depleted") if params.get("skip_partially_depleted") is not None else
+                        params.get("skipPartial") if params.get("skipPartial") is not None else
+                        gset.get("skip_partially", gset.get("skip_partially_gathered", gset.get("skip_partially_gathered_nodes", gset.get("skip_partially_depleted", gset.get("skipPartial", True)))))
+                    ),
+                    avoid_territory=bool(
+                        params.get("avoid_enemy_territory") if params.get("avoid_enemy_territory") is not None else
+                        params.get("avoidEnemyTerritory") if params.get("avoidEnemyTerritory") is not None else
+                        params.get("avoid_territory") if params.get("avoid_territory") is not None else
+                        params.get("avoid_other_alliance_territories") if params.get("avoid_other_alliance_territories") is not None else
+                        params.get("avoid_other_alliance_territory") if params.get("avoid_other_alliance_territory") is not None else
+                        params.get("avoidTerritory") if params.get("avoidTerritory") is not None else
+                        gset.get("avoid_enemy_territory", gset.get("avoidEnemyTerritory", gset.get("avoid_territory", gset.get("avoid_other_alliance_territories", gset.get("avoid_other_alliance_territory", gset.get("avoidTerritory", True))))))
+                    ),
+                    alliance_tag=str(params.get("alliance_tag") or gset.get("alliance_tag") or char.get("alliance_tag") or "").strip(),
+                    alliance_id=int(params.get("alliance_id") or gset.get("alliance_id") or char.get("alliance_id") or 0),
+                    gather_config=gset,
+                    auto_balance_lowest_rss=bool(
+                        params.get("auto_balance_lowest_rss") if params.get("auto_balance_lowest_rss") is not None else
+                        gset.get("auto_balance_lowest_rss", False)
+                    ),
+                    log_callback=lambda msg: log_wire("GATHER", msg),
+                    login_bytes=_login_bytes,
+                    char_name=char.get("name"),
+                    tenant_id=user_id,
+                    bot_id=params.get("bot_id") or account.get("bot_id") or "",
+                )
+                g_data = success if isinstance(success, dict) else {}
+                if success:
+                    TaskLogDAO.update_status(task_id, "SUCCESS", {
+                        "wire_logs": wire_logs,
+                        "status": "completed",
+                        "details": {"targets": targets, "status": "marches deployed or already active", **g_data}
+                    })
+                    return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": g_data}
+                else:
+                    TaskLogDAO.update_status(task_id, "FAILED", {
+                        "wire_logs": wire_logs,
+                        "error": "0 marches confirmed (check army availability)",
+                        "details": g_data
+                    })
+                    return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": "0 marches confirmed", "data": g_data}
+            except Exception as exc:
+                TaskLogDAO.update_status(task_id, "FAILED", {"wire_logs": wire_logs, "error": str(exc)})
+                return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": str(exc), "data": {}}
+
+        if task_type in ("alliance_donation", "alliance_sweep", "alliance", "donate", "donation", "alliance_actions"):
+            char_name = char.get("name") or f"Role_{role_id}"
+            bot_id = str(params.get("bot_id") or account.get("bot_id") or user_id or "")
+            log_wire("INIT", f"Dispatching Alliance Actions & Donation for {char_name} (#{role_id})...")
+            try:
+                from app.services.alliance_donator import AllianceTechDonator, is_tech_donation_enabled
+                from app.services.activity_logger import TenantActivityStream
+
+                cset = (CharacterSettingsDAO.get_by_character_id(char["id"]) or {})
+                tech_enabled = is_tech_donation_enabled(cset, params)
+
+                # Strict toggle check: If explicitly donation task and toggle is disabled, log and exit
+                if task_type in ("donate", "donation", "alliance_donation") and not tech_enabled:
+                    disabled_msg = "[ALLIANCE] Tech donation is DISABLED via dashboard toggle. Skipping."
+                    log_wire("ALLIANCE", disabled_msg)
+                    wire_logs.append(disabled_msg)
+                    TaskLogDAO.update_status(task_id, "SUCCESS", {
+                        "wire_logs": wire_logs,
+                        "status": "completed",
+                        "details": {"donated": 0, "reason": "disabled_by_toggle"}
+                    })
+                    return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": {"donated": 0, "reason": "disabled_by_toggle"}}
+
+                alliance_id = int(params.get("alliance_id") or cset.get("alliance_id") or char.get("alliance_id") or 0)
+                alliance_tag = str(params.get("alliance_tag") or cset.get("alliance_tag") or char.get("alliance_tag") or "").strip()
+
+                try:
+                    from cloud_role_switcher import switch_cloud_active_role
+                    _sw = switch_cloud_active_role(role_id=int(role_id), server_id=int(kingdom_id), app_uid=str(account.get("app_uid") or ""), app_token=str(account.get("app_token") or ""), udid=str(account.get("udid") or ""))
+                    log_wire("CLOUD", f"Active-role switch for {role_id}: {_sw}")
+                except Exception as exc_sw:
+                    log_wire("WARN", f"Active-role switch failed (continuing): {exc_sw}")
+
+                gate_host, gate_port = LilithCloudService.resolve_gateway(str(account.get("app_uid") or ""), str(account.get("app_token") or ""), str(account.get("udid") or ""), int(kingdom_id))
+                log_wire("RESOLVE", f"Gateway {gate_host}:{gate_port} for alliance actions")
+
+                donate_res = await AllianceTechDonator.execute_alliance_donation(
+                    target_role_id=int(role_id),
+                    kingdom_id=int(kingdom_id),
+                    gate_host=gate_host,
+                    gate_port=gate_port,
+                    log_callback=lambda msg: log_wire("ALLIANCE", msg),
+                    app_uid=str(account.get("app_uid") or ""),
+                    app_token=str(account.get("app_token") or ""),
+                    udid=str(account.get("udid") or ""),
+                    char_name=char_name,
+                    donate_tech=tech_enabled,
+                    alliance_id=alliance_id,
+                    alliance_tag=alliance_tag,
+                )
+
+                if isinstance(donate_res, dict) and donate_res.get("reason") == "disabled_by_toggle":
+                    disabled_msg = "[ALLIANCE] Tech donation is DISABLED via dashboard toggle. Skipping."
+                    log_wire("ALLIANCE", disabled_msg)
+                    wire_logs.append(disabled_msg)
+                    TaskLogDAO.update_status(task_id, "SUCCESS", {
+                        "wire_logs": wire_logs,
+                        "status": "completed",
+                        "details": donate_res
+                    })
+                    return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": donate_res}
+
+                if isinstance(donate_res, dict) and donate_res.get("reason") == "not_in_alliance":
+                    no_alliance_msg = f"[ALLIANCE] Character is not in an alliance. Skipping tech donation."
+                    log_wire("ALLIANCE", no_alliance_msg)
+                    wire_logs.append(no_alliance_msg)
+                    TaskLogDAO.update_status(task_id, "SUCCESS", {
+                        "wire_logs": wire_logs,
+                        "status": "completed",
+                        "details": donate_res
+                    })
+                    return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": donate_res}
+
+                if isinstance(donate_res, dict):
+                    donated = int(donate_res.get("donated", 0))
+                    tech_id = donate_res.get("recommended_tech_id") or donate_res.get("tech_id") or 0
+                    score = donate_res.get("total_score", donate_res.get("score", 0))
+                elif isinstance(donate_res, int):
+                    donated = int(donate_res)
+                    tech_id = 0
+                    score = 0
+                else:
+                    donated = 0
+                    tech_id = 0
+                    score = 0
+
+                if tech_enabled:
+                    if donated and donated > 0:
+                        telemetry_msg = f"🔬 [{char_name}] Donated {donated} times to alliance tech"
+                        log_wire("DONATE", telemetry_msg)
+                        wire_logs.append(telemetry_msg)
+                        try:
+                            TenantActivityStream.emit(bot_id, char_name, telemetry_msg)
+                        except Exception:
+                            pass
+                    else:
+                        stop_reason = donate_res.get("reason", "cooldown") if isinstance(donate_res, dict) else "cooldown"
+                        if stop_reason == "chances_exhausted":
+                            telemetry_msg = f"🔬 [{char_name}] Alliance tech: 0 donation chances available (on cooldown)"
+                        else:
+                            telemetry_msg = f"🔬 [{char_name}] Alliance tech: donations finished ({stop_reason})"
+                        log_wire("DONATE", telemetry_msg)
+                        wire_logs.append(telemetry_msg)
+                        try:
+                            TenantActivityStream.emit(bot_id, char_name, telemetry_msg)
+                        except Exception:
+                            pass
+
+                TaskLogDAO.update_status(task_id, "SUCCESS", {
+                    "wire_logs": wire_logs,
+                    "status": "completed",
+                    "details": donate_res if isinstance(donate_res, dict) else {"donated": donated}
+                })
+                return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": donate_res if isinstance(donate_res, dict) else {"donated": donated}}
+            except Exception as exc:
+                log_wire("ERROR", f"Alliance execution failed: {str(exc)}")
+                import traceback; traceback.print_exc()
+                TaskLogDAO.update_status(task_id, "FAILED", {"wire_logs": wire_logs, "error": str(exc)})
+                return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": str(exc)}
+
+        if task_type in ("combat", "barbarians", "barbarian"):
+            log_wire("INIT", f"Dispatching Barbarian Combat Hunt for {char['name']} (#{role_id})...")
+            cset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("combat") or {})
+            hset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("hospital") or {})
+            target_level = params.get("level") or params.get("target_level") or cset.get("min_barb_level") or 6
+            highest_barb_level = params.get("highest_barb_level") or cset.get("highest_barb_level") or cset.get("max_barb_level") or "L7"
+            skip_barbs_below = params.get("skip_barbs_below") or cset.get("skip_barbs_below") or "None"
+            primary_cmd = params.get("primary_commander") or cset.get("primary_commander") or "Auto"
+            secondary_cmd = params.get("secondary_commander") or cset.get("secondary_commander") or "Auto (best available)"
+            combat_rounds = int(params.get("combat_rounds") or cset.get("combat_rounds") or 1)
+            dispatch_all = bool(params.get("dispatch_all_marches", cset.get("dispatch_all_marches", True)))
+            heal_troops = bool(params.get("heal_troops", hset.get("heal_troops", True)))
+            heal_batch = int(params.get("heal_batch", hset.get("heal_batch", 0)))
+
+            try:
+                from app.services.combat_engine import CombatEngine
+                target_char = {
+                    "role_id": int(role_id),
+                    "kingdom_id": int(kingdom_id),
+                    "app_uid": str(account.get("app_uid") or ""),
+                    "app_token": str(account.get("app_token") or ""),
+                    "udid": str(account.get("udid") or ""),
+                    "name": char.get("name")
+                }
+                try:
+                    from cloud_role_switcher import ensure_character_active
+                    ensure_character_active(target_char)
+                except Exception as exc_sw:
+                    log_wire("WARN", f"Active-role switch note: {exc_sw}")
+
+                try:
+                    from fleet_manager import resolve_login_bytes as _resolve_login
+                    _login_bytes = _resolve_login(target_char)
+                except Exception:
+                    _login_bytes = None
+
+                gate_host, gate_port = LilithCloudService.resolve_gateway(str(account.get("app_uid") or ""), str(account.get("app_token") or ""), str(account.get("udid") or ""), int(kingdom_id))
+                log_wire("RESOLVE", f"Gateway {gate_host}:{gate_port} for combat")
+                res_combat = await CombatEngine.execute_barbarian_hunt(
+                    target_role_id=int(role_id),
+                    kingdom_id=int(kingdom_id),
+                    gate_host=gate_host,
+                    gate_port=gate_port,
+                    app_uid=str(account.get("app_uid") or ""),
+                    app_token=str(account.get("app_token") or ""),
+                    udid=str(account.get("udid") or ""),
+                    target_level=target_level,
+                    highest_barb_level=str(highest_barb_level),
+                    skip_barbs_below=str(skip_barbs_below),
+                    primary_commander=str(primary_cmd),
+                    secondary_commander=str(secondary_cmd),
+                    combat_rounds=combat_rounds,
+                    dispatch_all_marches=dispatch_all,
+                    heal_troops=heal_troops,
+                    heal_batch=heal_batch,
+                    char_name=str(char.get("name") or f"Governor #{role_id}"),
+                    login_bytes=_login_bytes,
+                    alliance_id=int((char.get("alliance_id") or 0)),
+                    log_callback=lambda msg: log_wire("COMBAT", msg)
+                )
+
+                # Zero-config dynamic roster sync (reads the cookie dict filled by
+                # CombatEngine.execute_barbarian_hunt from live Opcodes 1201/1157/1002).
+                try:
+                    _hero_state: Dict[str, Any] = {}
+                    _res = res_combat if isinstance(res_combat, dict) else {}
+                    _hero_raw = _res.get("hero_discovery") or (params or {}).get("_hero_discovery_state")
+                    if isinstance(_hero_raw, dict):
+                        _hero_state = _hero_raw
+                    if _hero_state.get("roster"):
+                        from app.services.protocol.hero_parser import persist_roster_to_db as _persist
+                        _persist(
+                            role_id,
+                            _hero_state.get("roster") or [],
+                            set(_hero_state.get("garrison") or ()),
+                            source="socket_worker_1201",
+                        )
+                        log_wire("HERO_DISCOVERY", f"Roster sync complete: {len(_hero_state.get('roster') or [])} heroes, garrison={sorted(_hero_state.get('garrison') or ())}")
+                except Exception as e_hsync:
+                    log_wire("WARN", f"Hero roster sync note: {e_hsync}")
+                if res_combat.get("success"):
+                    TaskLogDAO.update_status(task_id, "SUCCESS", {"wire_logs": wire_logs, "status": "completed", "details": res_combat})
+                    return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": res_combat}
+                else:
+                    err_c = res_combat.get("error", "Combat hunt failed")
+                    TaskLogDAO.update_status(task_id, "FAILED", {"wire_logs": wire_logs, "error": err_c})
+                    return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": err_c}
+            except Exception as exc:
+                log_wire("ERROR", f"Combat execution failed: {str(exc)}")
+                import traceback; traceback.print_exc()
+                TaskLogDAO.update_status(task_id, "FAILED", {"wire_logs": wire_logs, "error": str(exc)})
+                return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": str(exc)}
+
+        if task_type in ("hospital", "heal"):
+            log_wire("INIT", f"Dispatching Hospital Healing Sweep for {char['name']} (#{role_id})...")
+            hset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("hospital") or {})
+            heal_batch = int(params.get("heal_batch") or hset.get("heal_batch") or 1000)
+            try:
+                from app.services.hospital_engine import HospitalEngine
+                gate_host, gate_port = LilithCloudService.resolve_gateway(str(account.get("app_uid") or ""), str(account.get("app_token") or ""), str(account.get("udid") or ""), int(kingdom_id))
+                log_wire("RESOLVE", f"Gateway {gate_host}:{gate_port} for hospital")
+                res_heal = await HospitalEngine.execute_hospital_healing(
+                    target_role_id=int(role_id),
+                    kingdom_id=int(kingdom_id),
+                    gate_host=gate_host,
+                    gate_port=gate_port,
+                    app_uid=str(account.get("app_uid") or ""),
+                    app_token=str(account.get("app_token") or ""),
+                    udid=str(account.get("udid") or ""),
+                    heal_batch=heal_batch,
+                    log_callback=lambda msg: log_wire("HOSPITAL", msg)
+                )
+                TaskLogDAO.update_status(task_id, "SUCCESS", {"wire_logs": wire_logs, "status": "completed", "details": res_heal})
+                return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": res_heal}
+            except Exception as exc:
+                log_wire("ERROR", f"Hospital execution failed: {str(exc)}")
+                import traceback; traceback.print_exc()
+                TaskLogDAO.update_status(task_id, "FAILED", {"wire_logs": wire_logs, "error": str(exc)})
+                return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": str(exc)}
+
+        if task_type in ("daily_claims", "daily"):
+            log_wire("INIT", f"Dispatching Daily Claims & City Harvest for {char['name']} (#{role_id})...")
+            dset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("daily_claims") or {})
+            cset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("city") or {})
+            try:
+                from app.services.daily_claims import DailyClaimsEngine
+                gate_host, gate_port = LilithCloudService.resolve_gateway(str(account.get("app_uid") or ""), str(account.get("app_token") or ""), str(account.get("udid") or ""), int(kingdom_id))
+                log_wire("RESOLVE", f"Gateway {gate_host}:{gate_port} for daily claims")
+                res_daily = await DailyClaimsEngine.execute_daily_claims(
+                    target_role_id=int(role_id),
+                    kingdom_id=int(kingdom_id),
+                    gate_host=gate_host,
+                    gate_port=gate_port,
+                    app_uid=str(account.get("app_uid") or ""),
+                    app_token=str(account.get("app_token") or ""),
+                    udid=str(account.get("udid") or ""),
+                    vip_chest=bool(dset.get("vip_chest", True)),
+                    daily_quests=bool(dset.get("daily_quest_chests", True)),
+                    chronicle=bool(dset.get("chronicle", True)),
+                    city_harvest=bool(cset.get("collect_resources", True)),
+                    log_callback=lambda msg: log_wire("DAILY", msg),
+                    user_bot_id=str(params.get("bot_id") or account.get("bot_id") or ""),
+                    char_name=str(char.get("name") or "")
+                )
+                TaskLogDAO.update_status(task_id, "SUCCESS", {"wire_logs": wire_logs, "status": "completed", "details": res_daily})
+                return {"success": True, "task_id": task_id, "wire_logs": wire_logs, "data": res_daily}
+            except Exception as exc:
+                log_wire("ERROR", f"Daily claims execution failed: {str(exc)}")
+                import traceback; traceback.print_exc()
+                TaskLogDAO.update_status(task_id, "FAILED", {"wire_logs": wire_logs, "error": str(exc)})
+                return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": str(exc)}
+
+        if task_type == "train":
+            log_wire("INIT", f"Dispatching Smart Troop Training for {char['name']} (#{role_id})...")
+            settings = (CharacterSettingsDAO.get_by_character_id(char["id"]) or {})
+
+            cats = params.get("categories")
+            if not cats:
+                cats = ["infantry", "cavalry", "archery", "siege"]
+
+            pct = int(params.get("percentage") or settings.get("train_pct") or 100)
+            custom_count = params.get("count")
+            if custom_count is not None and str(custom_count).isdigit() and int(custom_count) > 0:
+                unit_count = int(custom_count)
+            elif settings.get("train_count_custom"):
+                unit_count = int(settings.get("train_count_custom"))
+            else:
+                unit_count = None
+
+            tiers = params.get("tiers") or settings.get("tiers") or {}
+
+            log_wire("CONFIG", f"Targets: {', '.join(cats).upper()} | Mode: {pct}% MAX Capacity (Custom: {unit_count}) | Tiers: {tiers}")
+
+            try:
+                from app.services.smart_troop_trainer import train_troops_dynamically
+                success = await train_troops_dynamically(
+                    target_type=cats,
+                    unit_count=unit_count,
+                    target_role_id=int(role_id),
+                    kingdom_id=int(kingdom_id),
+                    log_callback=lambda msg: log_wire("TRAIN", msg),
+                    tiers=tiers,
+                    percentage=pct
+                )
+                TaskLogDAO.update_status(task_id, "SUCCESS", {
+                    "wire_logs": wire_logs,
+                    "status": "completed",
+                    "details": {"categories": cats, "percentage": pct, "count": unit_count, "tiers": tiers}
+                })
+                return {"success": True, "task_id": task_id, "wire_logs": wire_logs}
+            except Exception as exc:
+                log_wire("ERROR", f"Training execution failed: {str(exc)}")
+                TaskLogDAO.update_status(task_id, "FAILED", {"wire_logs": wire_logs, "error": str(exc)})
+                return {"success": False, "task_id": task_id, "wire_logs": wire_logs, "error": str(exc)}
+
+        TaskLogDAO.update_status(task_id, "RUNNING", {"wire_logs": wire_logs, "step": "cloud_role_switch"})
+        log_wire("CLOUD", f"Binding cloud session to Governor {char['name']} (ID {role_id}, K#{kingdom_id})...")
+
+        # 1. Cloud Role Switch (NON-BLOCKING: Opcode 14 authoritative, switch best-effort)
+        try:
+            sw_ok = LilithCloudService.set_active_role(
+                app_uid=app_uid,
+                app_token=app_token,
+                udid=udid,
+                role_id=str(role_id),
+                kingdom_id=int(kingdom_id),
+            )
+            if sw_ok:
+                log_wire("CLOUD", "Cloud session bound (optional, non-blocking).")
+            else:
+                log_wire("CLOUD", f"Cloud switch not required/failed for {role_id} - continuing direct gateway connect (Opcode 14 authoritative).")
+        except Exception as _e_sw:
+            log_wire("CLOUD", f"Cloud switch exception (non-blocking): {_e_sw}")
+
+        # Cloud propagation window so gateways pick up the new active role.
+        # Spec said 0.35s, but live verification (2026-09-10) showed the gateway
+        # still serving the previous role after 0.35s -> raised to 2.0s.
+        await asyncio.sleep(2.0)
+
+        # 2. Resolve Gateway
+        gate_host, gate_port = LilithCloudService.resolve_gateway(app_uid, app_token, udid, kingdom_id)
+        log_wire("RESOLVE", f"Gateway assigned: {gate_host}:{gate_port}")
+
+        # 3. Connect TCP Socket
+        reader, writer = None, None
+        try:
+            log_wire("TCP", f"Connecting TCP socket to {gate_host}:{gate_port}...")
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(gate_host, gate_port),
+                timeout=10.0
+            )
+            log_wire("TCP", "Socket connected. Awaiting Opcode 8306 Server Greeting...")
+
+            # 4. Read Server Greeting
+            hdr = await asyncio.wait_for(reader.readexactly(2), timeout=8.0)
+            flen = (hdr[0] << 8) | hdr[1]
+            greeting_raw = hdr + await reader.readexactly(flen)
+            
+            gn = parse_greeting(greeting_raw)
+            log_wire("HANDSHAKE", f"Greeting received! Dynamic Seeds: TX=0x{gn.seed1:08x}, RX=0x{gn.seed2:08x}")
+
+            crypto_tx = RokCrypto(gn.seed1)
+            crypto_rx = RokCrypto(gn.seed2)
+
+            # 5. Send Opcode 14 (Android login frame — honors cloud role state;
+            #    the legacy PC template pins a stale role, see LOGIN_PROTOCOL_SPEC.md)
+            try:
+                login_bytes = build_android_login_frame(
+                    player_id=str(app_uid),
+                    access_token=str(app_token),
+                    udid=str(udid),
+                    ip=LilithCloudService.public_ip(),
+                )
+            except Exception as e:
+                log_wire("WARN", f"Android frame build failed ({e}); using legacy PC frame.")
+                login_bytes = build_login_frame(
+                    player_id=str(app_uid),
+                    access_token=str(app_token),
+                    app_id=2104267,
+                    platform="android"
+                )
+            enc_login = crypto_tx.encrypt(login_bytes)
+            writer.write(FrameParser.build_frame(enc_login))
+            await writer.drain()
+            log_wire("AUTH", f"Dispatched Opcode 14 Login ({len(login_bytes)}B encrypted)...")
+
+            # 6. Read Gate Response (Opcode 54 ACK + Opcode 15 Player Profile)
+            login_ack = False
+            bound_player_id: Optional[int] = None
+            op15_seen = False
+            stash_op302: Optional[Dict[str, Any]] = None
+            deadline = asyncio.get_event_loop().time() + 6.0
+            read_opcodes = []
+
+            while asyncio.get_event_loop().time() < deadline:
+                try:
+                    f_hdr = await asyncio.wait_for(reader.readexactly(2), timeout=1.0)
+                    r_len = (f_hdr[0] << 8) | f_hdr[1]
+                    raw_payload = await reader.readexactly(r_len)
+                    dec_payload = crypto_rx.decrypt(raw_payload)
+
+                    z_idx = dec_payload.find(b"\x78\x9c")
+                    if z_idx == -1:
+                        z_idx = dec_payload.find(b"\x78\x01")
+                    decomp = zlib.decompress(dec_payload[z_idx:]) if z_idx != -1 else dec_payload
+                    msg = ProtobufCodec.decode_message(decomp)
+
+                    chunks = msg[1] if isinstance(msg.get(1), list) else [msg]
+                    for chunk in chunks:
+                        sub = chunk if isinstance(chunk, dict) else (ProtobufCodec.decode_message(chunk) if isinstance(chunk, bytes) else {})
+                        op = sub.get(1)
+                        if op:
+                            read_opcodes.append(op)
+                        if op == 54:
+                            login_ack = True
+                            log_wire("AUTH_ACK", "Received Opcode 54: Gate Authenticated OK!")
+                        elif op == 15:
+                            op15_seen = True
+                            cands: List[int] = []
+                            _collect_id_candidates(sub, cands)
+                            log_wire("PROFILE", f"Received Opcode 15 Player Profile (id candidates: {cands[:6]}).")
+                            if int(role_id) in cands:
+                                bound_player_id = int(role_id)
+                            elif cands and bound_player_id is None:
+                                bound_player_id = cands[0]
+                        elif op == 1201:
+                            log_wire("HEROES", "Received Opcode 1201 Hero Roster push from server.")
+                            try:
+                                from app.services.protocol.hero_parser import parse_heroes_from_1201, persist_roster_to_db, GATHERING_SPECIALIST_IDS
+                                p2_data = sub.get(2) if isinstance(sub.get(2), bytes) else b""
+                                if p2_data:
+                                    roster_1201 = parse_heroes_from_1201(p2_data)
+                                    persist_roster_to_db(role_id, roster_1201, set(), source="live_socket_1201")
+                                    for h in roster_1201:
+                                        hid = h.get("hero_id")
+                                        lvl = int(h.get("level", 1) or 1)
+                                        effective_stars = int(h.get("star", 1) or 1)
+                                        is_gath = bool(h.get("is_gatherer") or hid in GATHERING_SPECIALIST_IDS)
+                                        log_wire("HERO_INVENTORY", f"Hero #{hid}: Level {lvl}, Stars {effective_stars}, is_gatherer={is_gath}, busy=False")
+                            except Exception as e_1201:
+                                log_wire("WARN", f"Opcode 1201 hero parse note: {e_1201}")
+                        elif op == 1157:
+                            try:
+                                from app.services.protocol.hero_parser import parse_roster_from_1157, persist_roster_to_db
+                                p2_data = sub.get(2) if isinstance(sub.get(2), bytes) else b""
+                                if p2_data:
+                                    roster_1157 = parse_roster_from_1157(p2_data)
+                                    persist_roster_to_db(role_id, roster_1157, set(), source="live_socket_1157")
+                            except Exception as e_1157:
+                                log_wire("WARN", f"Opcode 1157 hero parse note: {e_1157}")
+                        elif op in (125, 1002):
+                            log_wire("PROFILE", f"Received Opcode {op} Governor Profile Sync.")
+                            if op == 1002:
+                                try:
+                                    from app.services.protocol.hero_parser import parse_heroes_from_1002, parse_wall_garrison_from_1002, persist_roster_to_db, GATHERING_SPECIALIST_IDS
+                                    p2_data = sub.get(2) if isinstance(sub.get(2), bytes) else b""
+                                    if p2_data:
+                                        roster_1002 = parse_heroes_from_1002(p2_data)
+                                        wall_gar = parse_wall_garrison_from_1002(p2_data)
+                                        persist_roster_to_db(role_id, roster_1002, wall_gar, source="live_socket_1002")
+                                        for h in roster_1002:
+                                            hid = h.get("hero_id")
+                                            lvl = int(h.get("level", 1) or 1)
+                                            effective_stars = int(h.get("star", 1) or 1)
+                                            is_gath = bool(h.get("is_gatherer") or hid in GATHERING_SPECIALIST_IDS)
+                                            log_wire("HERO_INVENTORY", f"Hero #{hid}: Level {lvl}, Stars {effective_stars}, is_gatherer={is_gath}, busy=False")
+                                except Exception as e_1002:
+                                    log_wire("WARN", f"Opcode 1002 hero parse note: {e_1002}")
+                        elif op == 302:
+                            # Barracks snapshots arrive in the early burst; stash the
+                            # latest for the train branch (later reads see nothing).
+                            stash_op302 = sub
+                except asyncio.TimeoutError:
+                    if login_ack:
+                        break
+                except Exception:
+                    break
+
+            if not login_ack:
+                log_wire("WARN", f"Did not receive Opcode 54 ACK within timeout (opcodes read: {read_opcodes[:8]}).")
+            else:
+                log_wire("EXEC", f"Session established. Executing task: '{task_type}'...")
+
+            # 6b. STRICT Opcode 15 role assertion: the gateway must serve the
+            # requested governor, never a stale cloud binding.
+            if op15_seen:
+                if bound_player_id is not None and str(bound_player_id) != str(role_id):
+                    err = (f"Role mismatch error: Expected {role_id}, "
+                           f"but gateway bound to {bound_player_id}")
+                    log_wire("ERROR", err)
+                    res = {"success": False, "task_id": task_id,
+                           "error": err, "wire_logs": wire_logs}
+                    TaskLogDAO.update_status(task_id, "FAILED", res)
+                    return res
+                if bound_player_id is not None:
+                    log_wire("BIND_OK", f"Opcode 15 confirms gateway bound to {role_id}.")
+                    CharacterDAO.set_active_cloud(char["account_id"], str(role_id))
+                else:
+                    log_wire("WARN", "Opcode 15 arrived but no PlayerId could be parsed; proceeding without flag update.")
+            else:
+                log_wire("WARN", "Opcode 15 Player Profile not observed in handshake window; proceeding without flag update.")
+
+            # 7. Execute Task-Specific Command
+            task_result_data = {}
+            if task_type == "train":
+                # Dynamic training: saved character settings (%, custom count,
+                # per-category tiers) merged with explicit task params, live
+                # op302 state -> per-category template, capacity clamp, op300
+                # order, server verdict, 302 read-back.
+                # (Legacy op102 path was silently ignored by the server.)
+                settings = CharacterSettingsDAO.get_by_character_id(char["id"])
+                tiers_cfg = settings.get("tiers") or {}
+                tier_param = params.get("tier", "auto")
+                pct = int(settings.get("train_pct") or 100)
+                count_req = int(params.get("count", 0) or 0)
+                if count_req <= 0:
+                    count_req = int(settings.get("train_count_custom") or 200)
+                cats = params.get("categories") or list(CATEGORIES)
+                cats = [c for c in cats if c in CATEGORIES] or list(CATEGORIES)
+                levels = params.get("levels") or {}
+
+                log_wire("TRAIN", f"Reading live barracks state (pct={pct}%, base={count_req})...")
+                from app.services.training import parse_barracks_state
+                live = parse_barracks_state(stash_op302) if stash_op302 else {}
+                if live:
+                    log_wire("TRAIN", "Live queues: " + ", ".join(
+                        f"{c}(tpl={s['template_id']},n={s['count']},left={s['remaining_sec']}s)"
+                        for c, s in live.items()))
+                else:
+                    fresh = await read_barracks_state(reader, crypto_rx, seconds=2.0)
+                    live.update(fresh)
+                    if live:
+                        log_wire("TRAIN", "Live queues: " + ", ".join(
+                            f"{c}(tpl={s['template_id']},n={s['count']},left={s['remaining_sec']}s)"
+                            for c, s in live.items()))
+                if not live:
+                    log_wire("WARN", "No op302 snapshot seen; using default templates.")
+
+                results = []
+                for cat in cats:
+                    st = live.get(cat, {})
+                    if st.get("is_busy"):
+                        log_wire("SKIP", f"{cat} busy ({st.get('remaining_sec', 0)}s left).")
+                        results.append({"category": cat, "status": "busy", "count": 0})
+                        continue
+                    t = tier_param if tier_param not in ("auto", None, "") else tiers_cfg.get(cat, "auto")
+                    clean_t = str(t).lower().replace("t", "").strip() if t is not None else ""
+                    if clean_t in ("off", "none", "skip", "disabled", "false", "0"):
+                        log_wire("SKIP", f"{cat} training disabled by configuration (tier={t}).")
+                        results.append({"category": cat, "status": "skipped", "count": 0, "tier": t})
+                        continue
+                    tpl = resolve_template(t, cat, live)
+                    if tpl == "off":
+                        log_wire("SKIP", f"{cat} training resolved to off.")
+                        results.append({"category": cat, "status": "skipped", "count": 0, "tier": t})
+                        continue
+                    cap = capacity_for(levels.get(cat))
+                    count = count_req
+                    if cap is not None:
+                        count = min(count_req, max(1, cap * pct // 100))
+                    res = await train_category(
+                        reader, writer, crypto_tx, crypto_rx, cat, tpl, count,
+                        log_wire, levels=levels,
+                        collect_first=bool(st.get("needs_collect")))
+                    res["tier"] = t
+                    results.append(res)
+                    await asyncio.sleep(0.1)
+                started = [r for r in results if r.get("status") in ("training", "confirmed")]
+                # Ultra-detailed training telemetry per category
+                try:
+                    _building_names = {"infantry": "Barracks", "cavalry": "Stable", "archery": "Archery Range", "siege": "Workshop"}
+                    for r in results:
+                        if r.get("status") in ("training", "confirmed"):
+                            cat = r.get("category","siege")
+                            cnt = int(r.get("count") or 0)
+                            tier_val = r.get("tier", "auto")
+                            try:
+                                tier_num = int(str(tier_val).replace("T","").replace("t","")) if str(tier_val).lower() not in ("auto","", "None") else 1
+                            except Exception:
+                                tier_num = 1
+                            # Infer tier from template if auto
+                            if str(tier_val).lower() in ("auto",""):
+                                # fallback T1
+                                tier_num = 1
+                                # try to detect from template if available
+                                try:
+                                    tpl = r.get("template_id") or ""
+                                    # T tier mapping not critical; keep 1
+                                    pass
+                                except Exception:
+                                    pass
+                            bname = _building_names.get(cat, cat.capitalize())
+                            unit_title = cat.capitalize()
+                            _cname = char.get("name") or f"Role_{role_id}"
+                            dash_train_msg = f"[{_cname}] Trained {cnt:,}x {unit_title} (T{tier_num} {cat.capitalize()}) at {bname}"
+                            print(f"[DASHBOARD] {dash_train_msg}")
+                            log_wire("TRAIN_OK", dash_train_msg)
+                            try:
+                                TaskLogDAO.create(
+                                    task_id=f"train_{role_id}_{cat}_{int(__import__('time').time())}",
+                                    role_id=str(role_id),
+                                    task_type="troop_training",
+                                    status="SUCCESS",
+                                    details={
+                                        "message": dash_train_msg,
+                                        "character_name": char.get('name'),
+                                        "unit_count": cnt,
+                                        "tier": f"T{tier_num}",
+                                        "category": cat,
+                                        "building": bname,
+                                        "template_id": r.get("template_id","")
+                                    },
+                                    character_id=int(char["id"]) if char.get("id") else None
+                                )
+                                try:
+                                    import asyncio as _aio2
+                                    _aio2.create_task(activity_stream.broadcast(dash_train_msg, user_id=user_id or ""))
+                                except Exception:
+                                    pass
+                            except Exception as e_log:
+                                print(f"[-] TaskLogDAO train write error: {e_log}")
+                except Exception as e_tele:
+                    print(f"[-] train telemetry error: {e_tele}")
+
+                task_result_data = {"requested": count_req, "pct": pct, "results": results,
+                                    "started": len(started), "total": len(results)}
+                if not started:
+                    log_wire("WARN", "No barracks started training (all busy or rejected).")
+
+            elif task_type == "gather":
+                # Saved gather filters apply unless the task call overrides them.
+                # NOTE: march-slot awareness (free queues) needs Opcode 1178 which
+                # is not yet verified on the wire — see LOGIN_PROTOCOL_SPEC.md.
+                gset = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("gather") or {})
+                type_names = {"food": 1, "wood": 2, "stone": 3, "gold": 4, "gem": 5}
+                res_type = int(params.get("resource_type") or 0)
+                if not res_type:
+                    prio = gset.get("priority_types") or ["food"]
+                    res_type = type_names.get(str(prio[0]).lower(), 1)
+                level = int(params.get("level") or gset.get("node_min_level") or 2)
+                search_cmd = cmd_search_resource_type(res_type, level=level)
+                writer.write(FrameParser.build_frame(crypto_tx.encrypt(search_cmd)))
+                await writer.drain()
+                log_wire("DISPATCH", f"Dispatched Opcode 1007 Resource Node Search (Type {res_type}, Lvl>={level})")
+                await asyncio.sleep(0.15)
+
+                # Default gather march
+                gather_cmd = cmd_gather(resource_node_id=123456)
+                writer.write(FrameParser.build_frame(crypto_tx.encrypt(gather_cmd)))
+                await writer.drain()
+                log_wire("DISPATCH", "Dispatched Opcode 1012 March Dispatch to Resource Node.")
+                task_result_data = {"status": "gathering_dispatched", "resource_type": res_type,
+                                    "filters": {"node_min_level": gset.get("node_min_level"),
+                                                "node_max_level": gset.get("node_max_level"),
+                                                "priority_types": gset.get("priority_types")}}
+
+            elif task_type in ("daily_claims", "daily"):
+                from app.services.daily_claims import DailyClaimsEngine
+                cfg_daily = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("daily_claims") or {})
+                cfg_city = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("city") or {})
+
+                class _SocketClientAdapterDaily:
+                    def send_packet(self, opcode: int, payload: bytes):
+                        raw = ProtobufCodec.encode_message({1: opcode, 2: payload})
+                        writer.write(FrameParser.build_frame(crypto_tx.encrypt(raw)))
+
+                adapter_daily = _SocketClientAdapterDaily()
+                res_daily = DailyClaimsEngine.run_daily_claims(
+                    adapter_daily,
+                    vip_chest=bool(cfg_daily.get("vip_chest", True)),
+                    daily_quests=bool(cfg_daily.get("daily_quest_chests", True)),
+                    chronicle=bool(cfg_daily.get("chronicle", True)),
+                    city_harvest=bool(cfg_city.get("collect_resources", True)),
+                )
+                await writer.drain()
+                task_result_data = {"status": "daily_claims_completed", "results": res_daily}
+                log_wire("DAILY_OK", f"Daily claims completed: {res_daily}")
+
+            elif task_type in ("alliance_sweep", "alliance_actions"):
+                from app.services.alliance_engine import AllianceEngine
+                cfg_alliance = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("alliance") or {})
+
+                class _SocketClientAdapterAlliance:
+                    def send_packet(self, opcode: int, payload: bytes):
+                        raw = ProtobufCodec.encode_message({1: opcode, 2: payload})
+                        writer.write(FrameParser.build_frame(crypto_tx.encrypt(raw)))
+
+                adapter_alliance = _SocketClientAdapterAlliance()
+                res_alliance = AllianceEngine.run_alliance_sweep(
+                    adapter_alliance,
+                    help_members=bool(cfg_alliance.get("help_alliance_members", True)),
+                    claim_pit=bool(cfg_alliance.get("gather_resource_pit", True)),
+                    donate_tech=bool(cfg_alliance.get("donate_tech", True)),
+                    claim_gifts=bool(cfg_alliance.get("claim_gifts", True)),
+                )
+                await writer.drain()
+                task_result_data = {"status": "alliance_sweep_completed", "results": res_alliance}
+                log_wire("ALLIANCE_OK", f"Alliance sweep completed: {res_alliance}")
+
+            elif task_type in ("hospital", "heal"):
+                from app.services.hospital_engine import HospitalEngine
+                cfg_hosp = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("hospital") or {})
+                heal_batch = int(cfg_hosp.get("heal_batch") or 1000)
+
+                class _SocketClientAdapterHosp:
+                    def send_packet(self, opcode: int, payload: bytes):
+                        raw = ProtobufCodec.encode_message({1: opcode, 2: payload})
+                        writer.write(FrameParser.build_frame(crypto_tx.encrypt(raw)))
+
+                adapter_hosp = _SocketClientAdapterHosp()
+                res_heal = HospitalEngine.run_healing_cycle(adapter_hosp, heal_batch=heal_batch)
+                await writer.drain()
+                task_result_data = {"status": "hospital_cycle_completed", "success": res_heal}
+                log_wire("HOSPITAL_OK", f"Hospital healing cycle executed: {res_heal}")
+
+            elif task_type in ("combat", "barbarians"):
+                from app.services.combat_engine import CombatEngine
+                cfg_combat = (CharacterSettingsDAO.get_by_character_id(char["id"]).get("combat") or {})
+                min_lvl = int(cfg_combat.get("min_barb_level") or 6)
+
+                class _SocketClientAdapterCombat:
+                    def __init__(self):
+                        self.last_received_packets = [(op, b"") for op in read_opcodes]
+                    def send_packet(self, opcode: int, payload: bytes):
+                        raw = ProtobufCodec.encode_message({1: opcode, 2: payload})
+                        writer.write(FrameParser.build_frame(crypto_tx.encrypt(raw)))
+
+                adapter_combat = _SocketClientAdapterCombat()
+                res_combat = CombatEngine.run_barbarian_cycle(
+                    adapter_combat,
+                    role_id=int(role_id),
+                    target_level=min_lvl,
+                )
+                await writer.drain()
+                task_result_data = {"status": "combat_cycle_completed", "success": res_combat}
+                log_wire("COMBAT_OK", f"Barbarian combat cycle executed: {res_combat}")
+
+            elif task_type == "alliance_help":
+                help_cmd = cmd_alliance_help()
+                writer.write(FrameParser.build_frame(crypto_tx.encrypt(help_cmd)))
+                await writer.drain()
+                log_wire("DISPATCH", "Dispatched Opcode 1209 (Alliance One-Click Help).")
+                task_result_data = {"status": "alliance_help_sent"}
+
+            elif task_type == "sync_full":
+                # Query state and profile
+                state_cmd = cmd_player_state()
+                writer.write(FrameParser.build_frame(crypto_tx.encrypt(state_cmd)))
+                await writer.drain()
+                log_wire("DISPATCH", "Dispatched Opcode 2 Player Full State Query.")
+                
+                # Fetch fresh profile stats from rocdir
+                fresh_roles = LilithCloudService.get_roles(app_uid, app_token, udid)
+                for r in fresh_roles:
+                    if r["role_id"] == role_id:
+                        CharacterDAO.upsert(
+                            account_id=char["account_id"],
+                            role_id=r["role_id"],
+                            name=r["name"],
+                            kingdom_id=r["kingdom_id"],
+                            power=r["power"],
+                            city_level=r["city_level"],
+                            avatar_url=r["avatar_url"],
+                            alliance_tag=r["alliance_tag"],
+                            is_active_cloud=True
+                        )
+                        task_result_data = {"synced_profile": r}
+                        log_wire("SYNC_OK", f"Updated live stats: Power={r['power']:,}, CityLevel={r['city_level']}")
+                        break
+
+            # 8. Clean Socket Teardown
+            writer.write(FrameParser.build_frame(crypto_tx.encrypt(cmd_keepalive())))
+            await writer.drain()
+            await asyncio.sleep(0.2)
+            log_wire("DONE", f"Task '{task_type}' completed successfully. Socket closed cleanly.")
+
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            CharacterDAO.update_run_times(role_id, last_run=now_str)
+            AccountDAO.update_last_run(char["account_id"], last_run=now_str)
+            asyncio.create_task(activity_stream.broadcast(f"Task '{task_type}' completed successfully for {char['name']}", kingdom_id=str(kingdom_id), user_id=user_id))
+
+            res = {
+                "success": True,
+                "task_id": task_id,
+                "role_id": role_id,
+                "task_type": task_type,
+                "data": task_result_data,
+                "wire_logs": wire_logs
+            }
+            TaskLogDAO.update_status(task_id, "SUCCESS", res)
+            return res
+
+        except Exception as e:
+            err_msg = f"Socket execution error: {str(e)}"
+            log_wire("ERROR", err_msg)
+            res = {
+                "success": False,
+                "task_id": task_id,
+                "error": err_msg,
+                "wire_logs": wire_logs
+            }
+            TaskLogDAO.update_status(task_id, "FAILED", res)
+            return res
+        finally:
+            if writer:
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except Exception:
+                    pass

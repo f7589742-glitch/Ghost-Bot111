@@ -1,0 +1,29 @@
+[MEM] Found 2876 readable memory ranges
+[MEM] Scanned 2479 ranges
+[EngineDll ranges] 0
+[EngineDll RW ranges] 4
+  RW range: 0x7ff9e2a70000 size=12288 prot=rw-
+  RW range: 0x7ff9e2a73000 size=8192 prot=rw-
+  RW range: 0x7ff9e2a75000 size=1982464 prot=rw-
+  RW range: 0x7ff9e2c67000 size=24576 prot=rw-
+[Patterns] Found 4 occurrences of greeting pattern 08 f2 42
+  Pattern at 0x1d51bec7501 in range 0x1d51be63000
+  Pattern at 0x1d5c18c1bd5 in range 0x1d5c18c0000
+  Pattern at 0x7ff942937f0c in range 0x7ff942931000
+  Pattern at 0x7ff94575ac99 in range 0x7ff945749000
+[MODULES] 146 modules loaded
+[MODULE] bcrypt.dll @ 0x7ffa1a6e0000 size=159744
+[MODULE] CRYPT32.dll @ 0x7ffa1a020000 size=1429504
+[MODULE] WINHTTP.dll @ 0x7ffa138b0000 size=1089536
+[MODULE] bcryptPrimitives.dll @ 0x7ffa1a650000 size=532480
+[MODULE] cryptnet.dll @ 0x7ffa13cb0000 size=200704
+[MODULE] cryptbase.dll @ 0x7ffa19700000 size=49152
+[MODULE] CRYPTSP.dll @ 0x7ffa19710000 size=98304
+[-] read code err: TypeError: not a function
+[FREncry_encrypt addr] 0x7ff9e29a1810 num=-493217776
+[Vuplex] Found VuplexWebViewWindows.dll @ 0x7ff9f2660000 size=393216
+[Vuplex exports] 71
+  WebView_enableRemoteDebugging @ 0x7ff9f26710e0
+  WebView_loadUrl @ 0x7ff9f2671b00
+  WebView_loadUrlWithHeaders @ 0x7ff9f2671c80
+[*] Deep analysis complete

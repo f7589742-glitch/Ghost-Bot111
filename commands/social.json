@@ -1,0 +1,24 @@
+{
+  "commands": {
+    "alliance_help": {
+      "msg_id": 1205,
+      "payload_hex": "",
+      "category": "social",
+      "description": "Request alliance help for all buildings/research"
+    },
+    "claim_daily_rewards": {
+      "msg_id": 532,
+      "payload_hex": "",
+      "category": "daily",
+      "description": "Claim daily rewards (opcode 532, payload built dynamically)",
+      "builder": "build_claim_daily"
+    },
+    "mail_collect": {
+      "msg_id": 300,
+      "payload_hex": "",
+      "category": "mail",
+      "description": "Collect rewards from mailbox (opcode 300, payload built dynamically)",
+      "builder": "build_mail_collect"
+    }
+  }
+}

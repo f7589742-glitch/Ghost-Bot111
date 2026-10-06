@@ -1,0 +1,27 @@
+[19:39:40.558] === GAME SERVER GREETING CAPTURE ===
+[19:39:41.558] 
+============================================================
+[19:39:41.558] Connecting to 34.54.22.150:3101...
+[19:39:41.658] Connected! Local: ('10.8.0.9', 64568)
+[19:39:41.658] 
+Waiting for greeting...
+[19:39:41.949] First 4 bytes: 001008f2 = b'\x00\x10\x08\xf2'
+[19:39:41.950] Unknown protocol - trying to read length prefix
+[19:39:51.952]   Timeout after 14/2000 bytes
+[19:39:51.952] 
+Total received: 18 bytes
+[19:39:51.952] Full hex: 001008f242120b08f6eaf5ce0110d08a835a
+[19:39:55.964] (no extra data)
+[19:39:55.964] 
+Full greeting (18B):
+[19:39:55.964]   Hex: 001008f242120b08f6eaf5ce0110d08a835a
+[19:39:55.964] 
+Analysis:
+[19:39:55.966]   Byte 0: 0x00
+[19:39:55.966]   Byte 1: 0x10
+[19:39:55.966]   Bytes 4-8 (maybe nonce): 42120b08
+[19:39:55.966]   Bytes 8-16: f6eaf5ce0110d08a
+[19:39:55.966] 
+Connection closed.
+[19:39:55.966] 
+=== Log saved to: D:\aa\Headless Bot RoK\python\game_server_greeting.log ===

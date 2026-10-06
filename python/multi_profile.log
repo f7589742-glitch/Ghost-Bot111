@@ -1,0 +1,40 @@
+
+============================================================
+Profile: teez8888 uid=220293855
+  token: KWvJTSbRWSo3svdC3Y0G1J7t4myV4A-P
+  Login payload: 79B hex=080e124b0801220b32093232303239333835353a380a0932323032393338353512204b57764a5453...
+  Sent: 79B payload (81B wire)
+  [0.2s] RX(4B) f1=54 f2={}
+  [0.3s] RX(9B) f1=1 f2={1: 14, 2: 241}
+  [5.3s] Only 2 frames in 5s, stopping
+  Total: 2 frames
+
+============================================================
+Profile: farm12213 uid=259665500
+  token: D-N23i8cJLHYoilvisyUv5YZpuDcyO-P
+  Login payload: 79B hex=080e124b0801220b32093235393636353530303a380a093235393636353530301220442d4e323369...
+  Sent: 79B payload (81B wire)
+  [0.2s] RX(4B) f1=54 f2={}
+  [0.3s] RX(9B) f1=1 f2={1: 14, 2: 241}
+  [5.3s] Only 2 frames in 5s, stopping
+  Total: 2 frames
+
+============================================================
+Profile: farm12213_v3 uid=259675207
+  token: D-6yJKxQ13dR2RurQv1qJpFZPy2W1c-P
+  Login payload: 79B hex=080e124b0801220b32093235393637353230373a380a093235393637353230371220442d36794a4b...
+  Sent: 79B payload (81B wire)
+  [0.2s] RX(4B) f1=54 f2={}
+  [0.4s] RX(9B) f1=1 f2={1: 14, 2: 241}
+  [5.5s] Only 2 frames in 5s, stopping
+  Total: 2 frames
+
+============================================================
+Profile: teez9334 uid=233833482
+  token: Q70ef5TVBLPPYqNpipfWMtjxUFYTnP-P
+  Login payload: 79B hex=080e124b0801220b32093233333833333438323a380a093233333833333438321220513730656635...
+  Sent: 79B payload (81B wire)
+  [0.2s] RX(4B) f1=54 f2={}
+  [0.3s] RX(9B) f1=1 f2={1: 14, 2: 241}
+  [5.4s] Only 2 frames in 5s, stopping
+  Total: 2 frames

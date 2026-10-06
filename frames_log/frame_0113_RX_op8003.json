@@ -1,0 +1,8 @@
+{
+  "frame": 113,
+  "opcode": 8003,
+  "direction": "RX",
+  "time": 1784980161.843432,
+  "plaintext_hex": "08c33e121308acef840110fffdeec8f93320fc83efc8f933",
+  "size": 24
+}

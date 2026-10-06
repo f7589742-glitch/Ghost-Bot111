@@ -1,0 +1,10 @@
+{
+  "index": 9,
+  "opcode": 9717,
+  "encrypted_size": 50,
+  "decrypted_size": 50,
+  "fields": {
+    "1": 9717,
+    "2": "0a07080115ae47e13d0a07080215ae47e13d0a07080315ae47e13d0a07080415ae47e13d0a070805150000803f"
+  }
+}

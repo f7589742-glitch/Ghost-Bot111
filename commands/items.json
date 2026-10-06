@@ -1,0 +1,12 @@
+{
+  "commands": {
+    "use_speedup": {
+      "msg_id": 120,
+      "payload_hex": "",
+      "category": "items",
+      "description": "Trigger speedup action (opcode 120)",
+      "builder": "speedup"
+    }
+  }
+}
+

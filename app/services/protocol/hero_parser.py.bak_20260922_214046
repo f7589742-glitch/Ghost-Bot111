@@ -1,0 +1,524 @@
+"""
+hero_parser.py - Zero-Config Dynamic Hero Discovery & Real-Time Roster Sync.
+
+Reverse-engineered from live wire captures (session 6b4f8031, Sep 19, 2026):
+- Opcode 1201 (S->C, dispatched right after the 14 -> 15 login handshake):
+  Full unlocked commander catalogue (~21KB). Each entry carries
+  hero_id, level, star, skills (repeated), awakened flag.
+- Opcode 1157 (S->C): supplemental roster confirmation list; entries shaped
+  {1: hero_id, 4: level} (385 items observed on live login of NUCROSHOP).
+- Opcode 1002 (S->C): city state packet.
+  * Tags 9 / 12 (and submessage-form Tag 15) contain commander containers;
+    hero entries found there are heroes currently ASSIGNED to a duty
+    (Wall / City Garrison) -> tagging them is_wall_garrison prevents Error 135.
+  * Tag 15 as a plain varint = highest unlocked (defeated) barbarian level
+    (ground truth: Tag 15 = 6 on Level 17 farm accounts; attacking above it
+    returns Error 1021).
+
+This module is PURE (no network, no DB at import time) so it is unit-testable.
+DB persistence is exposed via persist_roster_to_db() with lazy imports.
+"""
+
+import os
+import sys
+import json
+import time
+import logging
+from typing import Any, Dict, List, Optional, Set
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+PYTHON_DIR = os.path.join(PROJECT_ROOT, "python")
+if PYTHON_DIR not in sys.path:
+    sys.path.insert(0, PYTHON_DIR)
+
+try:
+    from headless_client import ProtobufCodec
+except ImportError:
+    from python.headless_client import ProtobufCodec
+
+logger = logging.getLogger("hero_parser")
+
+# Hero IDs historically strong at gathering (kept only as a tiny tie-breaker
+# bonus; the live roster ranking remains level/star driven).
+GATHER_PREFERRED_HERO_IDS = {15, 25, 34, 38, 4, 27, 42, 105, 463}
+
+# RoK commander IDs are small catalog IDs; anything in the millions is a
+# player/entity ID, not a hero.
+_MIN_HERO_ID = 1
+_MAX_HERO_ID = 5000
+
+
+def _valid_hero_id(hid: Any) -> bool:
+    return isinstance(hid, int) and not isinstance(hid, bool) and _MIN_HERO_ID <= hid <= _MAX_HERO_ID
+
+
+def _decode_msg(buf: Any) -> Optional[dict]:
+    if not isinstance(buf, (bytes, bytearray)) or not buf:
+        return None
+    try:
+        m = ProtobufCodec.decode_message(bytes(buf))
+        return m if isinstance(m, dict) else None
+    except Exception:
+        return None
+
+
+def _skills_list(val: Any) -> List[int]:
+    if isinstance(val, list):
+        return [int(v) for v in val if isinstance(v, int) and not isinstance(v, bool)]
+    if isinstance(val, int) and not isinstance(val, bool):
+        return [val]
+    return []
+
+
+def _entry_to_hero(it: Any) -> Optional[Dict[str, Any]]:
+    """Normalize one roster entry (decoded dict) into a hero dict."""
+    if isinstance(it, (bytes, bytearray)):
+        it = _decode_msg(bytes(it))
+        if it is None:
+            return None
+    if not isinstance(it, dict):
+        return None
+    hid = it.get(1)
+    if not _valid_hero_id(hid):
+        return None
+    level = it.get(2)
+    star = it.get(3)
+    awakened = it.get(5)
+    return {
+        "hero_id": int(hid),
+        "level": int(level) if isinstance(level, int) and not isinstance(level, bool) and level > 0 else 1,
+        "star": int(star) if isinstance(star, int) and not isinstance(star, bool) and star > 0 else 0,
+        "skills": _skills_list(it.get(4)),
+        "is_awakened": bool(awakened) if not isinstance(awakened, (bytes, bytearray)) else False,
+    }
+
+
+def parse_heroes_from_1201(payload: bytes) -> List[Dict[str, Any]]:
+    """
+    Decodes raw Protobuf from Opcode 1201 to extract unlocked heroes.
+
+    Returns: [
+        {'hero_id': int, 'level': int, 'star': int, 'skills': [int], 'is_awakened': bool},
+        ...
+    ]
+    """
+    heroes: List[Dict[str, Any]] = []
+    m = _decode_msg(payload)
+    if m is None:
+        return heroes
+
+    entries = m.get(1)
+    items: List[Any] = entries if isinstance(entries, list) else ([entries] if entries is not None else [])
+    if not items:
+        # Fallback: any bytes-valued top-level field is a candidate entry blob.
+        items = [v for v in m.values() if isinstance(v, (bytes, bytearray))]
+
+    for it in items:
+        hero = _entry_to_hero(it)
+        if hero:
+            heroes.append(hero)
+
+    # Dedupe by hero_id, keeping the highest level seen.
+    best: Dict[int, Dict[str, Any]] = {}
+    for h in heroes:
+        prev = best.get(h["hero_id"])
+        if prev is None or h["level"] > prev["level"]:
+            best[h["hero_id"]] = h
+    return [best[k] for k in sorted(best)]
+
+
+def parse_roster_from_1157(payload: bytes) -> List[Dict[str, Any]]:
+    """
+    Opcode 1157 supplemental roster (observed live: 385 items shaped {1: hero_id, 4: level}).
+    Returns the same hero-dict schema as parse_heroes_from_1201 (star/skills unknown).
+    """
+    heroes: List[Dict[str, Any]] = []
+    m = _decode_msg(payload)
+    if m is None:
+        return heroes
+
+    entries = m.get(1)
+    items: List[Any] = entries if isinstance(entries, list) else ([entries] if entries is not None else [])
+    for it in items:
+        if isinstance(it, (bytes, bytearray)):
+            it = _decode_msg(bytes(it))
+            if it is None:
+                continue
+        if not isinstance(it, dict):
+            continue
+        hid = it.get(1)
+        if not _valid_hero_id(hid):
+            continue
+        lvl = it.get(4) or it.get(2) or 1
+        heroes.append({
+            "hero_id": int(hid),
+            "level": int(lvl) if isinstance(lvl, int) and not isinstance(lvl, bool) and lvl > 0 else 1,
+            "star": 0,
+            "skills": [],
+            "is_awakened": False,
+        })
+
+    best: Dict[int, Dict[str, Any]] = {}
+    for h in heroes:
+        prev = best.get(h["hero_id"])
+        if prev is None or h["level"] > prev["level"]:
+            best[h["hero_id"]] = h
+    return [best[k] for k in sorted(best)]
+
+
+def merge_rosters(*rosters: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Merge multiple rosters, dedupe by hero_id keeping richest info + max level."""
+    merged: Dict[int, Dict[str, Any]] = {}
+    for roster in rosters:
+        for h in roster or []:
+            hid = h.get("hero_id")
+            if not _valid_hero_id(hid):
+                continue
+            prev = merged.get(hid)
+            if prev is None:
+                merged[hid] = dict(h)
+                continue
+            prev["level"] = max(int(prev.get("level") or 1), int(h.get("level") or 1))
+            prev["star"] = max(int(prev.get("star") or 0), int(h.get("star") or 0))
+            if h.get("skills") and not prev.get("skills"):
+                prev["skills"] = h["skills"]
+            if h.get("is_awakened"):
+                prev["is_awakened"] = True
+    return [merged[k] for k in sorted(merged)]
+
+
+def parse_heroes_from_1002(payload: bytes) -> List[Dict[str, Any]]:
+    """
+    Decodes unlocked commanders directly from Opcode 1002 (sub_f1 Tag 12 subfield 5).
+    Contains: hero_id, level, star, skills.
+    Always sent by server on every account login.
+    """
+    heroes: List[Dict[str, Any]] = []
+    m = _decode_msg(payload)
+    if m is None:
+        return heroes
+
+    containers: List[dict] = [m]
+    sub_f1 = _decode_msg(m.get(1))
+    if sub_f1 is not None:
+        containers.insert(0, sub_f1)
+
+    for container in containers:
+        tag12 = container.get(12)
+        if isinstance(tag12, (bytes, bytearray)):
+            d12 = _decode_msg(bytes(tag12))
+            if d12 is not None:
+                items = d12.get(5, [])
+                if not isinstance(items, list):
+                    items = [items]
+                for it in items:
+                    if isinstance(it, (bytes, bytearray)):
+                        it = _decode_msg(bytes(it))
+                    if isinstance(it, dict):
+                        hid = it.get(1)
+                        if _valid_hero_id(hid):
+                            lvl = it.get(2) or 1
+                            star = it.get(3) or 0
+                            skills_val = it.get(4) or []
+                            skills_list = [skills_val] if isinstance(skills_val, int) else (skills_val if isinstance(skills_val, list) else [])
+                            heroes.append({
+                                "hero_id": int(hid),
+                                "level": int(lvl) if isinstance(lvl, int) and not isinstance(lvl, bool) else 1,
+                                "star": int(star) if isinstance(star, int) and not isinstance(star, bool) else 0,
+                                "skills": skills_list,
+                                "is_awakened": False,
+                            })
+
+    best: Dict[int, Dict[str, Any]] = {}
+    for h in heroes:
+        prev = best.get(h["hero_id"])
+        if prev is None or h["level"] > prev["level"]:
+            best[h["hero_id"]] = h
+    return [best[k] for k in sorted(best)]
+
+
+def parse_ap_from_1002(payload: bytes) -> Optional[int]:
+    """
+    Extracts current Action Points (AP) from Opcode 1002 (sub_f1 Tag 8 subfield 1).
+    """
+    m = _decode_msg(payload)
+    if m is None:
+        return None
+    sub_f1 = _decode_msg(m.get(1))
+    container = sub_f1 if sub_f1 is not None else m
+    f8 = container.get(8)
+    if isinstance(f8, (bytes, bytearray)):
+        d8 = _decode_msg(bytes(f8))
+        if d8 and isinstance(d8.get(1), int) and not isinstance(d8.get(1), bool):
+            return int(d8.get(1))
+    return None
+
+
+def parse_wall_garrison_from_1002(payload: bytes) -> Set[int]:
+    """
+    Extracts hero IDs assigned as City Defense / Wall Garrison from Opcode 1002.
+    Wall garrison assignments reside in Tag 9 subfield 4 (or legacy field 6), NOT Tag 12.
+    Tag 12 subfield 5 holds the general unlocked commander roster.
+    """
+    garrison: Set[int] = set()
+    m = _decode_msg(payload)
+    if m is None:
+        return garrison
+
+    containers: List[dict] = [m]
+    sub_f1 = _decode_msg(m.get(1))
+    if sub_f1 is not None:
+        containers.insert(0, sub_f1)
+
+    for container in containers:
+        for tag_id in (9,):
+            val = container.get(tag_id)
+            if not isinstance(val, (bytes, bytearray)):
+                continue
+            sv = _decode_msg(bytes(val))
+            if sv is None:
+                continue
+            for list_tag in (4, 6):
+                lv = sv.get(list_tag)
+                if lv is None:
+                    continue
+                items = lv if isinstance(lv, list) else [lv]
+                for it in items:
+                    if isinstance(it, (bytes, bytearray)):
+                        it = _decode_msg(bytes(it))
+                    if isinstance(it, dict):
+                        hid = it.get(1)
+                        if _valid_hero_id(hid):
+                            garrison.add(int(hid))
+    return garrison
+
+
+def parse_unlocked_barb_level_from_1002(payload: bytes) -> Optional[int]:
+    """
+    Highest unlocked (defeated) barbarian level from Opcode 1002 Tag 15 varint.
+    Ground truth (Sep 19): Tag 15 = 6 on farm accounts -> attacking L7+ = Error 1021.
+    Returns None when Tag 15 is a submessage or missing.
+    """
+    m = _decode_msg(payload)
+    if m is None:
+        return None
+    containers: List[dict] = [m]
+    sub_f1 = _decode_msg(m.get(1))
+    if sub_f1 is not None:
+        containers.append(sub_f1)
+    for container in containers:
+        v = container.get(15)
+        if isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 25:
+            return int(v)
+    return None
+
+
+def rank_heroes(
+    roster: List[Dict[str, Any]],
+    garrison_ids: Optional[Set[int]] = None,
+    mode: str = "combat",
+) -> List[int]:
+    """
+    Rank free (non-garrison) heroes.
+
+    mode="combat":  descending level, then star, awakened first.
+    mode="gather":  gathering-specialist bonus first, then level/star.
+    """
+    garrison_ids = garrison_ids or set()
+    free = [h for h in roster if h.get("hero_id") not in garrison_ids]
+
+    if mode == "gather":
+        def key(h: Dict[str, Any]):
+            gather_bonus = 1 if h.get("hero_id") in GATHER_PREFERRED_HERO_IDS else 0
+            skill_bonus = len(h.get("skills") or [])
+            return (-gather_bonus, -skill_bonus, -int(h.get("level") or 1), -int(h.get("star") or 0))
+    else:
+        def key(h: Dict[str, Any]):
+            return (-int(h.get("level") or 1), -int(h.get("star") or 0), 0 if h.get("is_awakened") else 1)
+
+    return [h["hero_id"] for h in sorted(free, key=key)]
+
+
+def build_roster_payload(
+    roster: List[Dict[str, Any]],
+    garrison_ids: Set[int],
+    source: str = "live",
+) -> Dict[str, Any]:
+    """
+    Build the auto-synced roster payload:
+    {"all_unlocked": [...], "combat_ranked": [...], "gather_ranked": [...], "wall_garrison": [...]}
+    """
+    return {
+        "all_unlocked": sorted(h["hero_id"] for h in roster),
+        "combat_ranked": rank_heroes(roster, garrison_ids, "combat"),
+        "gather_ranked": rank_heroes(roster, garrison_ids, "gather"),
+        "wall_garrison": sorted(garrison_ids),
+        "source": source,
+        "synced_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def build_commanders_json(
+    roster: List[Dict[str, Any]],
+    garrison_ids: Set[int],
+    source: str = "live",
+) -> str:
+    """JSON string form of build_roster_payload()."""
+    return json.dumps(build_roster_payload(roster, garrison_ids, source))
+
+
+FLEET_FILE = os.path.join(PROJECT_ROOT, "accounts_fleet.json")
+
+
+def _update_fleet_file(role_id: str, payload: Dict[str, Any]) -> bool:
+    """
+    Update the character's `commanders` (plain ID list) and `commanders_meta`
+    (rich ranked structure) inside accounts_fleet.json.
+
+    This is the golden bridge to the GATHERING engine: smart_gather_search.py
+    reads commander candidates from the fleet file via get_role_commanders()
+    -- so updating this file feeds gathering with ZERO changes to its code
+    (READ-ONLY guarantee respected).
+    Atomic write via tmp+rename. Never raises.
+    """
+    if not os.path.exists(FLEET_FILE):
+        return False
+    try:
+        with open(FLEET_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        items = raw if isinstance(raw, list) else [raw]
+        found = False
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            for ch in (item.get("characters") or []):
+                if isinstance(ch, dict) and str(ch.get("role_id")) == str(role_id):
+                    ch["commanders"] = list(payload["all_unlocked"])
+                    ch["commanders_meta"] = {
+                        "combat_ranked": payload["combat_ranked"],
+                        "gather_ranked": payload["gather_ranked"],
+                        "wall_garrison": payload["wall_garrison"],
+                        "source": payload["source"],
+                        "synced_at": payload["synced_at"],
+                    }
+                    found = True
+        if not found:
+            return False
+        tmp = FLEET_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(raw, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, FLEET_FILE)
+        return True
+    except Exception as e:
+        logger.debug(f"[HERO_DISCOVERY] Fleet file sync note for role {role_id}: {e}")
+        return False
+
+
+def persist_roster_to_db(
+    role_id: Any,
+    roster: List[Dict[str, Any]],
+    garrison_ids: Set[int],
+    source: str = "live_1201",
+) -> bool:
+    """
+    Auto-sync the discovered roster:
+    1. SQLite: character_settings.commanders_json = all_unlocked (plain int list,
+       the schema CharacterSettingsDAO._decode expects).
+    2. accounts_fleet.json: commanders + commanders_meta (combat/gather ranked,
+       wall garrison) -> feeds the gathering engine without touching its code.
+    Lazy imports keep this module import-safe for pure unit tests.
+    Never raises: failures are logged and return False.
+    """
+    if not roster:
+        return False
+    payload = build_roster_payload(roster, garrison_ids, source=source)
+
+    ok_db = False
+    try:
+        from app.models import CharacterDAO, CharacterSettingsDAO
+        db_char = CharacterDAO.get_by_role_id(str(role_id))
+        if db_char and db_char.get("id"):
+            CharacterSettingsDAO.upsert(db_char["id"], commanders=payload["all_unlocked"])
+            ok_db = True
+    except Exception as e:
+        logger.debug(f"[HERO_DISCOVERY] DB sync note for role {role_id}: {e}")
+
+    ok_fleet = _update_fleet_file(str(role_id), payload)
+
+    top = max(roster, key=lambda h: (int(h.get("level") or 1), int(h.get("star") or 0)))
+    logger.info(
+        f"[HERO_DISCOVERY] Role {role_id}: Discovered {len(roster)} heroes directly from server. "
+        f"Top combat hero: ID {top['hero_id']} (Lvl {top['level']}). "
+        f"Garrison: {payload['wall_garrison']} | db_sync={ok_db} fleet_sync={ok_fleet}"
+    )
+    return ok_db or ok_fleet
+
+
+# ---------------------------------------------------------------------------
+# Self-test with synthetic wire payloads (run: python -m app.services.protocol.hero_parser)
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    ok = True
+
+    # --- Synthetic Opcode 1201: two heroes, one awakened ---
+    e1 = ProtobufCodec.encode_message({1: 6, 2: 60, 3: 5, 4: [101, 102], 5: 1})
+    e2 = ProtobufCodec.encode_message({1: 36, 2: 30, 3: 4, 4: [201], 5: 0})
+    e3 = ProtobufCodec.encode_message({1: 99999999, 2: 1})  # player-id noise -> must be dropped
+    p1201 = (
+        ProtobufCodec.encode_field_bytes(1, e1)
+        + ProtobufCodec.encode_field_bytes(1, e2)
+        + ProtobufCodec.encode_field_bytes(1, e3)
+    )
+    heroes = parse_heroes_from_1201(p1201)
+    ids = [h["hero_id"] for h in heroes]
+    assert ids == [6, 36], f"1201 ids mismatch: {ids}"
+    assert heroes[0]["level"] == 60 and heroes[0]["is_awakened"], f"1201 fields wrong: {heroes[0]}"
+    print(f"[SELFTEST] 1201 roster OK: {heroes}")
+
+    # --- Synthetic Opcode 1157: {1: id, 4: level} ---
+    r1 = ProtobufCodec.encode_message({1: 15, 4: 37})
+    r2 = ProtobufCodec.encode_message({1: 34, 4: 33})
+    p1157 = ProtobufCodec.encode_field_bytes(1, r1) + ProtobufCodec.encode_field_bytes(1, r2)
+    roster1157 = parse_roster_from_1157(p1157)
+    assert [h["hero_id"] for h in roster1157] == [15, 34], f"1157 mismatch: {roster1157}"
+    print(f"[SELFTEST] 1157 roster OK: {roster1157}")
+
+    # --- Synthetic Opcode 1002: garrison under Tag 9 (field 4 list) + barb level Tag 15 varint ---
+    g1 = ProtobufCodec.encode_message({1: 15})
+    g2 = ProtobufCodec.encode_message({1: 6})
+    tag9_inner = ProtobufCodec.encode_field_bytes(4, g1) + ProtobufCodec.encode_field_bytes(4, g2)
+    p1002 = (
+        ProtobufCodec.encode_field_bytes(9, tag9_inner)
+        + ProtobufCodec.encode_field_varint(15, 6)
+        + ProtobufCodec.encode_field_varint(1, 4363)
+    )
+    gar = parse_wall_garrison_from_1002(p1002)
+    assert gar == {15, 6}, f"garrison mismatch: {gar}"
+    lvl = parse_unlocked_barb_level_from_1002(p1002)
+    assert lvl == 6, f"barb level mismatch: {lvl}"
+    print(f"[SELFTEST] 1002 garrison OK: {gar} | unlocked barb level OK: {lvl}")
+
+    # --- Ranking & merge ---
+    merged = merge_rosters(heroes, roster1157)
+    assert len(merged) == 4, f"merge size wrong: {len(merged)}"
+    combat_ranked = rank_heroes(merged, gar, "combat")
+    # Free heroes only: garrison {6, 15} excluded -> [34 (L33), 36 (L30)] by level desc
+    assert combat_ranked == [34, 36], f"combat ranking wrong: {combat_ranked}"
+    assert 15 not in combat_ranked and 6 not in combat_ranked, "garrison leaked into free list"
+    gather_ranked = rank_heroes(merged, gar, "gather")
+    assert gather_ranked[0] == 34, f"gather ranking wrong: {gather_ranked}"  # 34 is gather specialist
+    print(f"[SELFTEST] ranking OK: combat={combat_ranked} gather={gather_ranked}")
+
+    # --- commanders_json structure ---
+    cj = json.loads(build_commanders_json(merged, gar, source="live_test"))  # noqa: F841
+    assert set(["all_unlocked", "combat_ranked", "gather_ranked", "wall_garrison"]).issubset(cj.keys())
+    assert cj["wall_garrison"] == [6, 15]
+    struct_payload = build_roster_payload(merged, gar, source="live_test")
+    assert struct_payload["all_unlocked"] == [6, 15, 34, 36]
+    assert struct_payload["wall_garrison"] == [6, 15]
+    print(f"[SELFTEST] roster payload OK: {struct_payload}")
+
+    print("\n[SELFTEST] ALL HERO PARSER TESTS PASSED ✓")

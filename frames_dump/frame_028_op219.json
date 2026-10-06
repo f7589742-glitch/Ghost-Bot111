@@ -1,0 +1,10 @@
+{
+  "index": 28,
+  "opcode": 219,
+  "encrypted_size": 53,
+  "decrypted_size": 53,
+  "fields": {
+    "1": 219,
+    "2": "0a160a013112001a04626f726e20ffffffffffffffffff010a160a013212001a046974656d20ffffffffffffffffff01"
+  }
+}

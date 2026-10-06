@@ -1,0 +1,56 @@
+{
+  "stats": {
+    "ringCtx": "0x221f0c29028",
+    "ringCtxValid": true,
+    "s2cCount": 1,
+    "pendingSends": 0,
+    "threadDispatchCount": 5,
+    "sendSuccessCount": 0,
+    "sendFailCount": 5,
+    "lastS2C": {
+      "n": 1,
+      "len": 8
+    }
+  },
+  "s2c": [
+    {
+      "type": "s2c",
+      "len": 8,
+      "hex": "08071a0208744200",
+      "n": 1
+    }
+  ],
+  "dispatched": [],
+  "failed": [
+    {
+      "type": "send_failed",
+      "id": 1,
+      "error": "Error: access violation accessing 0x0",
+      "dispatchNum": 1
+    },
+    {
+      "type": "send_failed",
+      "id": 2,
+      "error": "Error: access violation accessing 0x0",
+      "dispatchNum": 2
+    },
+    {
+      "type": "send_failed",
+      "id": 3,
+      "error": "Error: access violation accessing 0x0",
+      "dispatchNum": 3
+    },
+    {
+      "type": "send_failed",
+      "id": 4,
+      "error": "Error: access violation accessing 0x0",
+      "dispatchNum": 4
+    },
+    {
+      "type": "send_failed",
+      "id": 5,
+      "error": "Error: access violation accessing 0x0",
+      "dispatchNum": 5
+    }
+  ]
+}

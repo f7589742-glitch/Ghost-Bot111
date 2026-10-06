@@ -1,0 +1,24 @@
+{
+  "finding": "SEED == SUB_VALUE",
+  "evidence": [
+    {
+      "ch": 1,
+      "sub_hex": "0x2951addb",
+      "seed_hex": "0x2951addb",
+      "sub_double": 693218779,
+      "type": 3,
+      "raw_bytes": "00 00 80 ed d6 a8 c4 41 03 00 00 00 00 00 00 00",
+      "match": true
+    },
+    {
+      "ch": 2,
+      "sub_hex": "0x1f1e53a4",
+      "seed_hex": "0x1f1e53a4",
+      "sub_double": 522081188,
+      "type": 3,
+      "raw_bytes": "00 00 00 a4 53 1e bf 41 03 00 00 00 00 00 00 00",
+      "match": true
+    }
+  ],
+  "conclusion": "sub_B9850 at 0xB9850 reads channel values (stored as doubles) from the connection object's channel store and returns them as 32-bit integers via cvttsd2si. The seeds ARE the sub values. No additional derivation."
+}

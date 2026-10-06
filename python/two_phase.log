@@ -1,0 +1,36 @@
+Profile: teez8888 uid=220293855
+
+============================================================
+Server: 34.54.22.150:3101
+
+Phase 1: Full login (555B)...
+  Connected, login sent (548B)
+  Got 2 frames:
+    [0] f1=54 (4B)
+    [1] f1=1 (9B)
+  Phase 1 connection closed
+
+Phase 2: Minimal login (79B)...
+  Connected, login sent (79B)
+  [0.2s] f1=54 (4B)
+  [0.4s] f1=1 (9B)
+
+  Total: 2 frames
+  f1 types: {"54": 1, "1": 1}
+
+============================================================
+Server: 43.159.113.101:3101
+
+Phase 1: Full login (555B)...
+  Connected, login sent (548B)
+  Got 1 frames:
+    [0] f1=54 (4B)
+  Phase 1 connection closed
+
+Phase 2: Minimal login (79B)...
+  Connected, login sent (79B)
+  [0.2s] f1=54 (4B)
+  [0.3s] f1=1 (9B)
+
+  Total: 2 frames
+  f1 types: {"54": 1, "1": 1}

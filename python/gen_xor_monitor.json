@@ -1,0 +1,32 @@
+[
+  {
+    "t": "xor_call",
+    "n": 1,
+    "ks_off": 2113,
+    "remaining": 1983
+  },
+  {
+    "t": "xor_call",
+    "n": 2,
+    "ks_off": 2364,
+    "remaining": 1732
+  },
+  {
+    "t": "xor_call",
+    "n": 3,
+    "ks_off": 2136,
+    "remaining": 1960
+  },
+  {
+    "t": "xor_call",
+    "n": 4,
+    "ks_off": 2252,
+    "remaining": 1844
+  },
+  {
+    "t": "xor_call",
+    "n": 5,
+    "ks_off": 2275,
+    "remaining": 1821
+  }
+]

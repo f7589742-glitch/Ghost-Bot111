@@ -1,0 +1,17 @@
+﻿python : 00:30:03 [INFO] === Testing OP102 variations (training) ===
+At line:1 char:37
++ ... "D:\aa\Headless Bot RoK\python"; python test_training.py 2>&1 | Out-F ...
++                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (00:30:03 [INFO]... (training) ===:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+00:30:03 [INFO] 
+=== Testing OP11 (entity data request) ===
+00:30:03 [INFO] 
+=== Testing OP2 (position update) ===
+00:30:03 [INFO] 
+=== Testing OP6 (keepalive) ===
+00:30:03 [INFO] 
+=== Testing OP8 (encrypted command) ===
+00:30:03 [INFO] 
+=== Testing OP110 (player query) ===

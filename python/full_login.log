@@ -1,0 +1,16 @@
+=== FULL LOGIN + WHMP HANDKSHAKE ===
+Profile: teez8888
+  access_token: KWvJTSbRWSo3svdC3Y0G1J7t4myV4A-P
+  app_uid: 220293855
+
+=== Trying 34.54.22.150:3101 ===
+  Greeting ok: sub1=0x64ea65e4 sub2=0x5debba9d
+  Login sent: 79B (minimal)
+
+--- Post-login phase (receiving game data) ---
+  [0.3s] RX(4B) f1=54: f1=54, f2=b''
+  [0.3s] RX(9B) f1=1: f1=1, f2=b'\x08\x0e\x10\xf1\x01'
+  [11.0s] 10s idle, stopping
+
+--- Results ---
+Token candidates: set()

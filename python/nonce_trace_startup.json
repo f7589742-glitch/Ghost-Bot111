@@ -1,0 +1,45 @@
+{
+  "func_entries": [
+    {
+      "t": "func_entry",
+      "regs": {
+        "rax": "0xe0f5a138",
+        "rbx": "0x09b1f450",
+        "rcx": "0xe0f5a138",
+        "rdx": "0x09b1f450",
+        "rsi": "0x00000004",
+        "rdi": "0x000002f0",
+        "r8": "0x00000000",
+        "r9": "0x00000000"
+      }
+    }
+  ],
+  "seed_inits": [
+    {
+      "t": "seed_init",
+      "ch": 1,
+      "ecx": "0x06b1abe0"
+    },
+    {
+      "t": "seed_init",
+      "ch": 2,
+      "ecx": "0x26845574"
+    }
+  ],
+  "rsi_writes": [
+    {
+      "t": "rsi_write",
+      "off": "0x635ca",
+      "rax": "0x06b1abe0",
+      "rsi": "0x00000004"
+    }
+  ],
+  "rdi_writes": [
+    {
+      "t": "rdi_write",
+      "off": "0x63620",
+      "rax": "0x26845574",
+      "rdi": "0x000002f0"
+    }
+  ]
+}

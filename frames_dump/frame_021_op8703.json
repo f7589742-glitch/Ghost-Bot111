@@ -1,0 +1,10 @@
+{
+  "index": 21,
+  "opcode": 8703,
+  "encrypted_size": 49,
+  "decrypted_size": 49,
+  "fields": {
+    "1": 8703,
+    "2": "0a22089a0310da9abbbb0618ffffffffffffffffff0120012800400048005000580060001206636173746c65"
+  }
+}

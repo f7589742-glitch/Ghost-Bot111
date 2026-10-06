@@ -1,0 +1,56 @@
+{
+  "stats": {
+    "ringCtx": "0x221f0c29028",
+    "ringCtxValid": true,
+    "s2cCount": 1,
+    "pendingSends": 0,
+    "swapCount": 5,
+    "sendSuccessCount": 0,
+    "sendFailCount": 0,
+    "gameCallCount": 18,
+    "lastS2C": {
+      "n": 1,
+      "len": 9
+    }
+  },
+  "s2c": [
+    {
+      "type": "s2c",
+      "len": 9,
+      "hex": "08071a0308b4014200",
+      "n": 1
+    }
+  ],
+  "dispatched": [
+    {
+      "type": "send_dispatched",
+      "id": 1,
+      "len": 4,
+      "swapNum": 1
+    },
+    {
+      "type": "send_dispatched",
+      "id": 2,
+      "len": 772,
+      "swapNum": 2
+    },
+    {
+      "type": "send_dispatched",
+      "id": 3,
+      "len": 790,
+      "swapNum": 3
+    },
+    {
+      "type": "send_dispatched",
+      "id": 4,
+      "len": 4,
+      "swapNum": 4
+    },
+    {
+      "type": "send_dispatched",
+      "id": 5,
+      "len": 4,
+      "swapNum": 5
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "greetings": [
+    {
+      "connection": 1,
+      "raw": "001108f242120c0895e3f6c90410ceafe4c601",
+      "field1": 8562,
+      "sub1": 1228779925,
+      "sub2": 416880590,
+      "sub1_hex": "0x493db195",
+      "sub2_hex": "0x18d917ce"
+    },
+    {
+      "connection": 2,
+      "raw": "001108f242120c0897f793e70410e5c798c501",
+      "field1": 8562,
+      "sub1": 1290075031,
+      "sub2": 413541349,
+      "sub1_hex": "0x4ce4fb97",
+      "sub2_hex": "0x18a623e5"
+    },
+    {
+      "connection": 3,
+      "raw": "001008f242120b08f7dd9fe60310e0bdb815",
+      "field1": 8562,
+      "sub1": 1019735799,
+      "sub2": 44965600,
+      "sub1_hex": "0x3cc7eef7",
+      "sub2_hex": "0x02ae1ee0"
+    },
+    {
+      "connection": 4,
+      "raw": "001108f242120c08cdffc5f00310cee68cd203",
+      "field1": 8562,
+      "sub1": 1041334221,
+      "sub2": 977482574,
+      "sub1_hex": "0x3e117fcd",
+      "sub2_hex": "0x3a43334e"
+    },
+    {
+      "connection": 5,
+      "raw": "001108f242120c08f89badf40610a4abb5ac06",
+      "field1": 8562,
+      "sub1": 1854623224,
+      "sub2": 1703761316,
+      "sub1_hex": "0x6e8b4df8",
+      "sub2_hex": "0x658d55a4"
+    },
+    {
+      "connection": 6,
+      "raw": "001108f242120c08ca88eb980310b3cdf7fe02",
+      "field1": 8562,
+      "sub1": 857392202,
+      "sub2": 803071667,
+      "sub1_hex": "0x331ac44a",
+      "sub2_hex": "0x2fdde6b3"
+    },
+    {
+      "connection": 7,
+      "raw": "001008f242120b08bebae1d60610fcedcd7f",
+      "field1": 8562,
+      "sub1": 1792564542,
+      "sub2": 267613948,
+      "sub1_hex": "0x6ad85d3e",
+      "sub2_hex": "0x0ff376fc"
+    },
+    {
+      "connection": 8,
+      "raw": "001108f242120c08dea0f7b40710afac93a005",
+      "field1": 8562,
+      "sub1": 1990053982,
+      "sub2": 1409603119,
+      "sub1_hex": "0x769dd05e",
+      "sub2_hex": "0x5404d62f"
+    },
+    {
+      "connection": 9,
+      "raw": "001108f242120c088bd2a28c06108591ded204",
+      "field1": 8562,
+      "sub1": 1636346123,
+      "sub2": 1247250565,
+      "sub1_hex": "0x6188a90b",
+      "sub2_hex": "0x4a578885"
+    },
+    {
+      "connection": 10,
+      "raw": "001108f242120c08bfdf8da00710db8890ef05",
+      "field1": 8562,
+      "sub1": 1946382271,
+      "sub2": 1575224411,
+      "sub1_hex": "0x74036fbf",
+      "sub2_hex": "0x5de4045b"
+    }
+  ],
+  "known_seeds": [
+    {
+      "seed1": 16956277,
+      "seed2": 1049256576
+    },
+    {
+      "seed1": 526175765,
+      "seed2": 233591415
+    },
+    {
+      "seed1": 476806917,
+      "seed2": 354576773
+    }
+  ]
+}

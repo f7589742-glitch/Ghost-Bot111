@@ -1,0 +1,33 @@
+{
+  "commands": {
+    "discover_nodes": {
+      "msg_id": 1176,
+      "payload_hex": "",
+      "category": "gathering",
+      "description": "Discover surrounding resource nodes (opcode 1176)",
+      "builder": "discover_nodes"
+    },
+    "gather_march": {
+      "msg_id": 1012,
+      "payload_hex": "",
+      "category": "gathering",
+      "description": "Send troops to gather resource node (opcode 1012)",
+      "builder": "gather_march"
+    },
+    "auto_gather": {
+      "msg_id": 1050,
+      "payload_hex": "",
+      "category": "gathering",
+      "description": "Click resource node to prepare march (opcode 1050)",
+      "builder": "auto_gather"
+    },
+    "march_move": {
+      "msg_id": 1004,
+      "payload_hex": "",
+      "category": "gathering",
+      "description": "Move troops to coordinates (opcode 1004)",
+      "builder": "march_move"
+    }
+  }
+}
+

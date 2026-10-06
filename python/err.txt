@@ -1,0 +1,1 @@
+C:\Python314\python.exe: can't open file 'D:\\\u0648\u0646\u062f\u0648\u0632\\Headless': [Errno 2] No such file or directory

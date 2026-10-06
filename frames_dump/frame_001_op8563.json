@@ -1,0 +1,10 @@
+{
+  "index": 1,
+  "opcode": 8563,
+  "encrypted_size": 16,
+  "decrypted_size": 16,
+  "fields": {
+    "1": 8563,
+    "2": "0a04776169740a03393132"
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "role_id": "222157544",
+  "production_buildings": [
+    {
+      "building_id": "71",
+      "resource_type": 3,
+      "resource_name": "Stone",
+      "building_type": "Quarry",
+      "uncollected": 3360
+    },
+    {
+      "building_id": "72",
+      "resource_type": 1,
+      "resource_name": "Food",
+      "building_type": "Farm",
+      "uncollected": 666
+    },
+    {
+      "building_id": "82",
+      "resource_type": 3,
+      "resource_name": "Stone",
+      "building_type": "Quarry",
+      "uncollected": 448
+    },
+    {
+      "building_id": "88",
+      "resource_type": 4,
+      "resource_name": "Gold",
+      "building_type": "Goldmine",
+      "uncollected": 280
+    },
+    {
+      "building_id": "81",
+      "resource_type": 4,
+      "resource_name": "Gold",
+      "building_type": "Goldmine",
+      "uncollected": 2590
+    },
+    {
+      "building_id": "59",
+      "resource_type": 1,
+      "resource_name": "Food",
+      "building_type": "Farm",
+      "uncollected": 5735
+    },
+    {
+      "building_id": "84",
+      "resource_type": 2,
+      "resource_name": "Wood",
+      "building_type": "Lumber Mill",
+      "uncollected": 620
+    },
+    {
+      "building_id": "75",
+      "resource_type": 3,
+      "resource_name": "Stone",
+      "building_type": "Quarry",
+      "uncollected": 420
+    },
+    {
+      "building_id": "62",
+      "resource_type": 2,
+      "resource_name": "Wood",
+      "building_type": "Lumber Mill",
+      "uncollected": 2402
+    },
+    {
+      "building_id": "79",
+      "resource_type": 1,
+      "resource_name": "Food",
+      "building_type": "Farm",
+      "uncollected": 620
+    },
+    {
+      "building_id": "90",
+      "resource_type": 4,
+      "resource_name": "Gold",
+      "building_type": "Goldmine",
+      "uncollected": 280
+    },
+    {
+      "building_id": "86",
+      "resource_type": 4,
+      "resource_name": "Gold",
+      "building_type": "Goldmine",
+      "uncollected": 280
+    },
+    {
+      "building_id": "77",
+      "resource_type": 2,
+      "resource_name": "Wood",
+      "building_type": "Lumber Mill",
+      "uncollected": 620
+    },
+    {
+      "building_id": "87",
+      "resource_type": 3,
+      "resource_name": "Stone",
+      "building_type": "Quarry",
+      "uncollected": 420
+    },
+    {
+      "building_id": "69",
+      "resource_type": 2,
+      "resource_name": "Wood",
+      "building_type": "Lumber Mill",
+      "uncollected": 620
+    },
+    {
+      "building_id": "64",
+      "resource_type": 1,
+      "resource_name": "Food",
+      "building_type": "Farm",
+      "uncollected": 806
+    }
+  ],
+  "barracks": {
+    "infantry": {
+      "building_id": "1",
+      "category": "infantry",
+      "unit_type": 1,
+      "level": 17,
+      "capacity": 1000,
+      "is_busy": true,
+      "remaining_seconds": 5408,
+      "needs_harvest": false,
+      "needs_collect": false,
+      "current_training_count": 1000
+    },
+    "archery": {
+      "building_id": "64",
+      "category": "archery",
+      "unit_type": 3,
+      "level": 17,
+      "capacity": 1000,
+      "is_busy": false,
+      "remaining_seconds": 0,
+      "needs_harvest": false,
+      "needs_collect": false
+    },
+    "cavalry": {
+      "building_id": "65",
+      "category": "cavalry",
+      "unit_type": 2,
+      "level": 17,
+      "capacity": 1000,
+      "is_busy": false,
+      "remaining_seconds": 0,
+      "needs_harvest": false,
+      "needs_collect": false
+    },
+    "siege": {
+      "building_id": "66",
+      "category": "siege",
+      "unit_type": 4,
+      "level": 17,
+      "capacity": 1000,
+      "is_busy": false,
+      "remaining_seconds": 0,
+      "needs_harvest": false,
+      "needs_collect": false
+    }
+  }
+}

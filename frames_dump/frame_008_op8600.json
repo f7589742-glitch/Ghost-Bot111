@@ -1,0 +1,10 @@
+{
+  "index": 8,
+  "opcode": 8600,
+  "encrypted_size": 43,
+  "decrypted_size": 43,
+  "fields": {
+    "1": 8600,
+    "2": "080910d1b60818ffdce7a6f9332000286c30adcae7a6f9333800400148005801600068007000"
+  }
+}

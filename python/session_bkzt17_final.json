@@ -1,0 +1,27 @@
+[
+  {
+    "index": 1,
+    "len": 4,
+    "type": "LOGIN_SUCCESS",
+    "summary": "f1=54 f2=b(0)",
+    "hex": "08361200",
+    "protobuf": {
+      "1": 54,
+      "2": "bhex:"
+    }
+  },
+  {
+    "index": 2,
+    "len": 9,
+    "type": "OP_1",
+    "summary": "f1=1 f2=b(5)",
+    "hex": "08011205080e10f101",
+    "protobuf": {
+      "1": 1,
+      "2": {
+        "1": 14,
+        "2": 241
+      }
+    }
+  }
+]

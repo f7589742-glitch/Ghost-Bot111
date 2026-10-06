@@ -1,0 +1,766 @@
+/* ==============================================================================
+   GHOSTBOT TACTICAL CYBER-CYAN — HIGH-PERFORMANCE MOBILE RESPONSIVE ENGINE
+   Specially tuned for iOS, Safari, Chrome Mobile, Android, and small tablets.
+   Ensures 100% pixel-perfect layout, no overflowing cards, organized icons,
+   touch ergonomics (44px targets), and drawer/tabs navigation.
+   ============================================================================== */
+
+/* ---------- 1. ROOT & MOBILE ADAPTIVE DEFAULTS ---------- */
+@media (max-width: 992px) {
+  html, body {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    -webkit-text-size-adjust: 100% !important;
+    -webkit-tap-highlight-color: transparent !important;
+    font-size: 14px !important;
+  }
+
+  /* Full-Height App Shell to Column Layout */
+  .app-shell {
+    flex-direction: column !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    position: relative !important;
+  }
+
+  /* ---------- 2. MOBILE TOP HEADER (CYBER COCKPIT BAR) ---------- */
+  .mobile-top-bar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    height: 56px !important;
+    padding: 0 14px !important;
+    background: rgba(4, 10, 23, 0.94) !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.28) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 229, 255, 0.1) !important;
+    z-index: 900 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .mobile-top-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  .mobile-hamburger-btn {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 10px !important;
+    background: rgba(0, 229, 255, 0.08) !important;
+    border: 1px solid rgba(0, 229, 255, 0.3) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 4px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    flex-shrink: 0 !important;
+  }
+
+  .mobile-hamburger-btn span {
+    display: block !important;
+    width: 18px !important;
+    height: 2px !important;
+    background: #00e5ff !important;
+    border-radius: 2px !important;
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.8) !important;
+    transition: all 0.25s ease !important;
+  }
+
+  .mobile-top-brand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    cursor: pointer !important;
+  }
+
+  .mobile-top-brand .logo-emblem {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 8px !important;
+    background: radial-gradient(circle, rgba(0, 229, 255, 0.25), rgba(4, 11, 24, 0.95)) !important;
+    border: 1px solid #00e5ff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.4) !important;
+  }
+
+  .mobile-top-brand .logo-emblem svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .mobile-top-brand .brand-title {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 900 !important;
+    font-size: 17px !important;
+    letter-spacing: -0.3px !important;
+    display: inline-flex !important;
+    direction: ltr !important;
+    color: #fff !important;
+  }
+
+  .mobile-top-brand .brand-title .bot-part {
+    color: #00e5ff !important;
+    text-shadow: 0 0 12px rgba(0, 229, 255, 0.7) !important;
+  }
+
+  .mobile-top-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .mobile-quick-btn {
+    height: 34px !important;
+    padding: 0 10px !important;
+    border-radius: 8px !important;
+    background: rgba(0, 229, 255, 0.08) !important;
+    border: 1px solid rgba(0, 229, 255, 0.25) !important;
+    color: #d6eeff !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    cursor: pointer !important;
+  }
+
+  .mobile-quick-btn svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  /* ---------- 3. OFF-CANVAS SIDEBAR DRAWER ---------- */
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    width: 285px !important;
+    max-width: 86vw !important;
+    z-index: 1500 !important;
+    background: rgba(4, 11, 25, 0.97) !important;
+    backdrop-filter: blur(28px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+    border: none !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 229, 255, 0.15) !important;
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    padding: 16px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* RTL drawer: slides from right side */
+  [dir="rtl"] .sidebar {
+    right: 0 !important;
+    left: auto !important;
+    border-left: 1px solid rgba(0, 229, 255, 0.35) !important;
+    transform: translateX(105%) !important;
+  }
+
+  /* LTR drawer: slides from left side */
+  [dir="ltr"] .sidebar {
+    left: 0 !important;
+    right: auto !important;
+    border-right: 1px solid rgba(0, 229, 255, 0.35) !important;
+    transform: translateX(-105%) !important;
+  }
+
+  /* When drawer is open */
+  .sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  /* Mobile Drawer Backdrop */
+  .mobile-drawer-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(2, 6, 15, 0.75) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+    z-index: 1400 !important;
+    display: none !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
+  }
+
+  .mobile-drawer-backdrop.active {
+    display: block !important;
+    opacity: 1 !important;
+  }
+
+  /* Drawer Close Icon Button inside Sidebar */
+  .drawer-close-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(0, 229, 255, 0.25) !important;
+    color: #fff !important;
+    font-size: 16px !important;
+    font-weight: 800 !important;
+    cursor: pointer !important;
+    position: absolute !important;
+    top: 14px !important;
+    inset-inline-end: 14px !important;
+  }
+
+  /* ---------- 4. WORKSPACE & SCROLL AREA ---------- */
+  .workspace {
+    flex: 1 !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    height: calc(100vh - 56px - 62px) !important;
+    height: calc(100dvh - 56px - 62px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 12px 10px 24px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .workspace-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 12px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .workspace-top-hud {
+    padding: 6px 8px !important;
+    font-size: 10.5px !important;
+    margin-bottom: 2px !important;
+    gap: 8px !important;
+  }
+
+  /* ---------- 5. COCKPIT HERO CARD (HERO-CONTROLLER-CARD) ---------- */
+  .hero-controller-card {
+    padding: 14px 12px !important;
+    border-radius: 14px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .hero-cockpit-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+
+  .hero-identity-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  .hero-bot-avatar-box {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 12px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .hero-bot-avatar-box img {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .hero-account-name {
+    font-size: 17px !important;
+    line-height: 1.25 !important;
+  }
+
+  .hero-badges-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    margin-top: 4px !important;
+  }
+
+  .hero-badge-pill {
+    font-size: 9px !important;
+    padding: 2px 7px !important;
+  }
+
+  /* Actions Row: 2-column mobile tactical grid */
+  .hero-actions-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+    margin-top: 8px !important;
+  }
+
+  .hero-cyber-action-btn {
+    min-height: 42px !important;
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    justify-content: center !important;
+    text-align: center !important;
+    width: 100% !important;
+    border-radius: 10px !important;
+  }
+
+  /* Slots Telemetry Module */
+  .hero-cockpit-slots {
+    padding: 12px 14px !important;
+    border-radius: 12px !important;
+    width: 100% !important;
+  }
+
+  .hero-slots-count-display {
+    font-size: 18px !important;
+  }
+
+  .hero-slots-led-grid {
+    grid-template-columns: repeat(20, 1fr) !important;
+    gap: 2px !important;
+  }
+
+  /* License Quantum Reactor */
+  .hero-cockpit-reactor {
+    padding: 12px 14px !important;
+    border-radius: 12px !important;
+    gap: 12px !important;
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .hero-reactor-dial-wrap {
+    width: 58px !important;
+    height: 58px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .hero-reactor-svg {
+    width: 58px !important;
+    height: 58px !important;
+  }
+
+  .hero-reactor-percent {
+    font-size: 12px !important;
+  }
+
+  .hero-reactor-countdown {
+    font-size: 12.5px !important;
+  }
+
+  /* ---------- 6. TABS BAR (HORIZONTAL SWIPEABLE) ---------- */
+  .tabs-bar,
+  .unit-room-tabs-bar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 6px 8px !important;
+    gap: 8px !important;
+    border-radius: 12px !important;
+    background: rgba(5, 13, 28, 0.85) !important;
+    border: 1px solid rgba(0, 229, 255, 0.2) !important;
+    margin-bottom: 6px !important;
+    scrollbar-width: none !important;
+  }
+
+  .tabs-bar::-webkit-scrollbar,
+  .unit-room-tabs-bar::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .tab-btn {
+    flex-shrink: 0 !important;
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    border-radius: 8px !important;
+    background: rgba(0, 229, 255, 0.05) !important;
+    border: 1px solid transparent !important;
+  }
+
+  .tab-btn.active {
+    background: rgba(0, 229, 255, 0.16) !important;
+    border-color: rgba(0, 229, 255, 0.45) !important;
+    color: #00e5ff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.25) !important;
+  }
+
+  .tab-btn.active::after {
+    display: none !important;
+  }
+
+  /* ---------- 7. FIXED MOBILE BOTTOM NAVIGATION BAR ---------- */
+  .mobile-bottom-nav {
+    display: flex !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 62px !important;
+    background: rgba(3, 9, 22, 0.96) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border-top: 1px solid rgba(0, 229, 255, 0.28) !important;
+    box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 229, 255, 0.1) !important;
+    z-index: 950 !important;
+    align-items: center !important;
+    justify-content: space-around !important;
+    padding: 0 4px !important;
+  }
+
+  .mob-nav-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 1 !important;
+    height: 100% !important;
+    gap: 3px !important;
+    color: #92b2d6 !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    text-decoration: none !important;
+    background: none !important;
+    border: none !important;
+  }
+
+  .mob-nav-item svg {
+    width: 20px !important;
+    height: 20px !important;
+    transition: transform 0.2s ease, color 0.2s ease !important;
+  }
+
+  .mob-nav-item.active {
+    color: #00e5ff !important;
+  }
+
+  .mob-nav-item.active svg {
+    transform: translateY(-2px) scale(1.1) !important;
+    color: #00e5ff !important;
+    filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.8)) !important;
+  }
+
+  /* ---------- 8. TAB 1: LIVE STREAM TELEMETRY CONSOLE ---------- */
+  #view-live .surface-card,
+  #consoleCard {
+    padding: 12px 10px !important;
+    border-radius: 14px !important;
+  }
+
+  .console-logs-wrap,
+  #liveLogsContainer {
+    max-height: 380px !important;
+    padding: 10px 8px !important;
+    font-size: 11px !important;
+    line-height: 1.5 !important;
+  }
+
+  .console-log-row {
+    font-size: 11px !important;
+    padding: 6px 8px !important;
+    word-break: break-word !important;
+  }
+
+  /* ---------- 9. TAB 2: ACCOUNTS & GOVERNORS MATRIX ---------- */
+  .account-group-card {
+    padding: 14px 12px !important;
+    border-radius: 14px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .account-group-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .account-group-actions {
+    display: flex !important;
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    margin-top: 6px !important;
+  }
+
+  .account-group-actions button {
+    flex: 1 !important;
+    min-height: 38px !important;
+    font-size: 11.5px !important;
+    padding: 6px 8px !important;
+    justify-content: center !important;
+  }
+
+  .governors-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .governor-card {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+  }
+
+  /* ---------- 10. TAB 3: INVENTORY MATRIX & RESOURCES ---------- */
+  .inv-summary-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .inv-stat-card {
+    padding: 12px 10px !important;
+    border-radius: 12px !important;
+  }
+
+  .inv-stat-card .val {
+    font-size: 16px !important;
+  }
+
+  /* Table horizontal scroll wrapper */
+  .inv-table-wrapper {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(0, 229, 255, 0.2) !important;
+    margin-top: 10px !important;
+  }
+
+  .inv-table-wrapper table {
+    min-width: 580px !important;
+    font-size: 11px !important;
+  }
+
+  .inv-table-wrapper th,
+  .inv-table-wrapper td {
+    padding: 8px 10px !important;
+    white-space: nowrap !important;
+  }
+
+  /* ---------- 11. TAB 5: CYBER CONFIGURATION CORE ---------- */
+  .gb-config-container {
+    gap: 12px !important;
+  }
+
+  .gb-config-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding: 14px 12px !important;
+  }
+
+  .gb-config-header-info {
+    width: 100% !important;
+  }
+
+  /* Horizontal swipeable category pills matrix */
+  .gb-config-nav-matrix {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    gap: 8px !important;
+    padding: 4px 2px 10px !important;
+    width: 100% !important;
+  }
+
+  .gb-config-nav-matrix::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .gb-cfg-pill {
+    flex-shrink: 0 !important;
+    min-width: 135px !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+    gap: 8px !important;
+  }
+
+  .gb-cfg-pill-icon {
+    width: 30px !important;
+    height: 30px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .gb-cfg-pill-icon svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  /* Settings Grid & Controls */
+  .gb-cfg-module-card {
+    padding: 14px 12px !important;
+    border-radius: 14px !important;
+  }
+
+  .cfg-field-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    width: 100% !important;
+    padding: 10px 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  }
+
+  .cfg-field-control {
+    width: 100% !important;
+  }
+
+  .form-select,
+  .form-input {
+    width: 100% !important;
+    min-height: 42px !important;
+    font-size: 13px !important;
+    border-radius: 10px !important;
+  }
+
+  /* March & Troop Sliders */
+  .marches-sliders-grid,
+  .troop-train-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  @media (max-width: 420px) {
+    .marches-sliders-grid,
+    .troop-train-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  /* ---------- 12. TAB 7: PLANS & STORE (UPGRADE) ---------- */
+  .shop-plans-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    width: 100% !important;
+  }
+
+  .shop-card {
+    width: 100% !important;
+    padding: 16px 14px !important;
+    border-radius: 16px !important;
+  }
+
+  .shop-card .btn-cyan-glow,
+  .shop-card button {
+    width: 100% !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+  }
+
+  /* ---------- 13. MODALS (LINK ACCOUNT, NOTIFS, UPDATES MAIL) ---------- */
+  .modal-backdrop {
+    padding: 10px !important;
+    align-items: flex-end !important;
+    padding-bottom: 70px !important;
+  }
+
+  .modal-box {
+    width: 100% !important;
+    max-width: 100vw !important;
+    max-height: 82vh !important;
+    border-radius: 18px !important;
+    padding: 18px 14px !important;
+    gap: 12px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .modal-footer-btns {
+    display: flex !important;
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .modal-footer-btns button {
+    width: 100% !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+    font-size: 13px !important;
+  }
+
+  /* ---------- 14. OVERVIEW STATS & FLEET ---------- */
+  .overview-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  .overview-bot-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .overview-bot-item .actions {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+  }
+
+  .overview-bot-item .actions button {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 40px !important;
+  }
+
+  /* ---------- 15. HIDE DESKTOP-ONLY ELEMENTS ON MOBILE ---------- */
+  .desktop-only-item {
+    display: none !important;
+  }
+}
+
+/* Extra small devices (< 380px) */
+@media (max-width: 380px) {
+  .hero-actions-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .inv-summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .overview-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hero-account-name {
+    font-size: 15px !important;
+  }
+}
+
+/* Desktop: hide mobile top bar, bottom bar, and drawer elements */
+@media (min-width: 993px) {
+  .mobile-top-bar,
+  .mobile-bottom-nav,
+  .mobile-drawer-backdrop,
+  .drawer-close-btn {
+    display: none !important;
+  }
+}

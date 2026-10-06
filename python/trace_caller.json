@@ -1,0 +1,80 @@
+{
+  "greeting": {
+    "t": "greeting",
+    "fd": 10284,
+    "n1": "0x6279a9e1",
+    "n2": "0x5046e6af",
+    "len": 19
+  },
+  "func63590": {
+    "t": "func63590_enter",
+    "arg1": "0x2d666d696a8",
+    "arg2": "0x2d488796ab0",
+    "bt": [
+      {
+        "addr": "0x7ff8d67d76d5",
+        "offset": "0xc76d5 (EngineDll.dll)"
+      },
+      {
+        "addr": "0x7ff8d67f44b8",
+        "offset": "0xe44b8 (EngineDll.dll)"
+      },
+      {
+        "addr": "0x7ff8d67d78c6",
+        "offset": "0xc78c6 (EngineDll.dll)"
+      },
+      {
+        "addr": "0x7ff8d67d6d91",
+        "offset": "0xc6d91 (EngineDll.dll)"
+      },
+      {
+        "addr": "0x7ff8d67d7bcd",
+        "offset": "0xc7bcd (EngineDll.dll)"
+      },
+      {
+        "addr": "0x7ff8d672a672",
+        "offset": "0x1a672 (EngineDll.dll)"
+      },
+      {
+        "addr": "0x7ff8d67724ee",
+        "offset": "0x624ee (EngineDll.dll)"
+      },
+      {
+        "addr": "0x7ff8d67d76d5",
+        "offset": "0xc76d5 (EngineDll.dll)"
+      }
+    ],
+    "connObjU32": [
+      1930327456,
+      726,
+      5267464,
+      7274610,
+      1901433744,
+      726,
+      4587520,
+      7077993,
+      1901433712,
+      726,
+      0,
+      2687030,
+      2289658752,
+      724,
+      1924442752,
+      726
+    ]
+  },
+  "seeds": [
+    {
+      "t": "seed_result",
+      "ch": 1,
+      "nonce": "0x1ac2744b",
+      "seed": "0x1fc00d52"
+    },
+    {
+      "t": "seed_result",
+      "ch": 2,
+      "nonce": "0x313cd8f0",
+      "seed": "0x343ea1e9"
+    }
+  ]
+}

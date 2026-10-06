@@ -1,0 +1,39 @@
+{
+  "brandTagline": "YOUR INTELLIGENT CLOUD FARM ASSISTANT",
+  "nav": {
+    "overview": "Overview",
+    "shop": "Store & Plans",
+    "leaderboard": "Leaderboard",
+    "yourBots": "YOUR BOTS",
+    "signOut": "Sign Out"
+  },
+  "checkout": {
+    "back": "← Back to Store",
+    "step1": "Configure Bot",
+    "step2": "Assign Unit",
+    "step3": "Payment Method",
+    "summaryTitle": "Order Summary",
+    "characters": "Characters",
+    "tier": "Tier",
+    "duration": "Duration",
+    "targetInstance": "Target Instance",
+    "paymentMethod": "Payment Method",
+    "total": "Total",
+    "continue": "Continue to Payment →"
+  },
+  "botRoom": {
+    "tabs": {
+      "live": "Live Stream",
+      "accounts": "Accounts",
+      "inventory": "Inventory",
+      "history": "Run History",
+      "settings": "Settings",
+      "rss": "RSS Logistics"
+    },
+    "status": {
+      "running": "RUNNING",
+      "standby": "STANDBY",
+      "active": "Active"
+    }
+  }
+}

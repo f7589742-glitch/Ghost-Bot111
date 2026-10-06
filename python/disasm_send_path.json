@@ -1,0 +1,10 @@
+{
+ "send_path_16400": [],
+ "recv_path_16b00": [],
+ "io_loop_15800": [],
+ "func_starts": [
+  "0x16545: push reg (57)",
+  "0x16581: push reg (53)",
+  "0x16582: sub rsp, 0x20"
+ ]
+}

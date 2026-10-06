@@ -1,0 +1,350 @@
+[
+  {
+    "type": "info",
+    "msg": "base=0x7ffe40690000"
+  },
+  {
+    "type": "ready"
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 0,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "a265b1fe4a43223e6ea7c1f4110b0ece57298b4768b2e7",
+      "after": "08c33e121208e2914510e5f3fbd6f53320e1f9fbd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 1,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08091200",
+      "after": "6f866e4c"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 2,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "3a69954b274e1c8fb16ea1dbbab667b7cc40ffa15b5261",
+      "after": "08c33e121208e3914510cefbfbd6f53320c781fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 3,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "50eef007145a3f265598c3b814a344f15942ec26d20f4c",
+      "after": "08c33e121208e4914510b683fcd6f53320b189fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 4,
+      "size": 46,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "3a2f9903199044deb0399f16183dd73ba6d542f757b928a87bb615058642ed5cf3e18833c4d8e8de0df3c8ffb137",
+      "after": "08bb0812290a2308eda7c566220a0d269485451544793045280030013a0a0d8aa4213d15c51a223e480010e59145"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 5,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "10ee14cff999b41ddc721cb8b1785ea2e31ec7e2bf1908",
+      "after": "08c33e121208e59145109f8bfcd6f533209991fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 6,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08091200",
+      "after": "4d4b3591"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 7,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "edc1ff07f6d4842a082ebd5ad1b3d56226d7783bfb0ab5",
+      "after": "08c33e121208e69145108d93fcd6f533208799fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 8,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "29fd9cca6bbd7aaee0b3ce5236d161835e51ff9e899969",
+      "after": "08c33e121208e7914510f09afcd6f53320e9a0fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 9,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "a784a82babba1bb8627cea47dd0a20336e14a9cf2a82dc",
+      "after": "08c33e121208e8914510d8a2fcd6f53320d4a8fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 10,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08091200",
+      "after": "51fa8f28"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 11,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "c6e316264bb5b65b4d314b33250a76ab66737dd2c562eb",
+      "after": "08c33e121208e9914510c4aafcd6f53320bdb0fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 12,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "bf3920b4427ac67585855649e86df160dc09871004ac03",
+      "after": "08c33e121208ea914510a8b2fcd6f53320a3b8fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 13,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "55c5359ce6969536a9cb91402a69ea248a2c23f6fe60db",
+      "after": "08c33e121208eb91451095bafcd6f5332090c0fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 14,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08091200",
+      "after": "2aa068d0"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 15,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "ed000f49f723bb18d55d96148c013700e94556f85d1945",
+      "after": "08c33e121208ec914510f9c1fcd6f53320f7c7fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 16,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "e51d4ca19a05342feb7359c152a98884d724197b613970",
+      "after": "08c33e121208ed914510e3c9fcd6f53320decffcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 17,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "5bfaf249e1fe30c64156577c2863b93a09b00d8a488788",
+      "after": "08c33e121208ee914510cad1fcd6f53320c7d7fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 18,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08091200",
+      "after": "806244f5"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 19,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "ac9f83f337b0ca62c7bfc14641da61480016b47cb2148b",
+      "after": "08c33e121208ef914510b3d9fcd6f53320addffcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 20,
+      "size": 70,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08021242900100609c01584e7000483c389c014000880199c2971832177b2279223a3437332c2274223a312c2278223a3731327d8001196800980101184e104e7819203c504e",
+      "after": "2ba573762aad093952dc7e9726a889269216e3fc4a10a8aecf43483c19ee62265dd715997113cfe90793c1b52856afc69419570b04dd5ce315d48e855d501ddd1055c4e5cf21"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 21,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "1af27655",
+      "after": "08031200"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 22,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "dc417c6bdc839bf78f4cbcf9771570b2341734bfe30d07",
+      "after": "08c33e121208f091451099e1fcd6f5332093e7fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 23,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "be057ca587a850292760b624a1ff21db720daa7fdeb834",
+      "after": "08c33e121208f1914510fee8fcd6f53320f7eefcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 24,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08091200",
+      "after": "eb6c3cf1"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 25,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "7c24e1d0b55f364b9473c76c95b52ddc199894683401df",
+      "after": "08c33e121208f2914510e9f0fcd6f53320e3f6fcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 26,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "d468a3d0d0a0cec19f69a59b5fc785e619ce9e89e16169",
+      "after": "08c33e121208f3914510d1f8fcd6f53320c9fefcd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 27,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "95c8512fbc061bbd7355e5ec8988a84bc1ed57afdaa938",
+      "after": "08c33e121208f4914510b680fdd6f53320b086fdd6f533"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 28,
+      "size": 116,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "8834bba3aa65a3e769ea5dd4e02557f2a9b145b67ebca2e265fce8bf966901b42c31df294eeee2fbd26d28e380663fdf956d67d5f04bcbf4df800d2fe1bbdbeb39844dda0a53620aebcfc3dbb40e01f30561303956a7a41fc9753635839249aa660e66fa6e3a43bd1e8d784d99e9f613045caab6",
+      "after": "08bb08126f0a6908eda7c566124408f9ac8707120a0d2694854515447930451a0a0d2694854515447930451a0a0dbe91854515043d3045256666263f28a588fdd6f53330004000480150a588fdd6f5335800220a0d269485451544793045280030023a0a0d8aa4213d15c51a223e480010f59145"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 29,
+      "size": 4,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "08091200",
+      "after": "651c564c"
+    }
+  },
+  {
+    "type": "xor",
+    "data": {
+      "n": 30,
+      "size": 23,
+      "isGreeting": false,
+      "isKeepalive": false,
+      "before": "3272a885ac2559b5df796427f70193c78ea7a856fa5c56",
+      "after": "08c33e121208f5914510a588fdd6f533209f8efdd6f533"
+    }
+  }
+]

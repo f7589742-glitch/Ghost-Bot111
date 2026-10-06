@@ -1,0 +1,106 @@
+﻿/* RoK Cloud Headless Dashboard - Dark Purple Theme */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+    --bg-dark: #0c0a15;
+    --card-bg: #141124;
+    --card-hover: #191530;
+    --border-color: rgba(139, 92, 246, 0.18);
+    --border-active: rgba(168, 85, 247, 0.4);
+    --terminal-bg: #090810;
+    --accent-purple: #8b5cf6;
+    --accent-violet: #7c3aed;
+    --accent-emerald: #10b981;
+    --accent-rose: #f43f5e;
+}
+
+[x-cloak] { 
+    display: none !important; 
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-dark);
+    color: #f1f0f7;
+    margin: 0;
+    padding: 0;
+}
+
+.mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #090810;
+}
+::-webkit-scrollbar-thumb {
+    background: #2b2548;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #413868;
+}
+
+/* Toggle Switches */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 22px;
+}
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #262140;
+    transition: .25s;
+    border-radius: 22px;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #948cb5;
+    transition: .25s;
+    border-radius: 50%;
+}
+input:checked + .slider {
+    background-color: #10b981;
+    border-color: #059669;
+}
+input:checked + .slider:before {
+    transform: translateX(16px);
+    background-color: #ffffff;
+}
+
+/* Terminal Line Highlights */
+.term-line {
+    line-height: 1.6;
+}
+.term-time {
+    color: #948cb5;
+}
+.term-kd {
+    color: #38bdf8;
+    font-weight: 600;
+}
+.term-text {
+    color: #e2e0ee;
+}

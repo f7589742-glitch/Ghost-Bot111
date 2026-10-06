@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gnome Bot RoK | Farm Bot Dashboard</title>
+  <link rel="stylesheet" href="/static/css/arcane.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- TOP HEADER CARD (Screenshot 5) -->
+  <header class="top-header-card">
+    <div class="profile-bar">
+      <!-- Profile Left -->
+      <div class="profile-left">
+        <div class="avatar-square">🌽</div>
+        <div class="profile-meta">
+          <div class="profile-title-row">
+            <span class="profile-name" id="headerBotUser">amer1220958</span>
+            <span class="badge-farm">FARM BOT</span>
+            <span class="badge-running" id="badgeRunning">
+              <span class="dot-pulse" id="dotPulse"></span>
+              <span id="statusText">Running</span>
+            </span>
+            <span class="badge-basic">BASIC</span>
+            <span class="badge-next" id="headerNextRun">Next run in 54m</span>
+          </div>
+          <div class="profile-sub-row">
+            <span>ID #<span id="headerBotId">1196</span></span>
+            <span>·</span>
+            <span><span id="slotsUsed">18</span> of <span id="slotsTotal">18</span> character slots used <span class="text-amber">at capacity</span> <span class="help-circle" title="Character slot capacity for this license tier">?</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile Right (License) -->
+      <div class="profile-right">
+        <div class="license-row">
+          <span class="license-link">License <span style="font-size:0.75rem; background:rgba(139,92,246,0.2); padding:1px 5px; border-radius:4px;">+</span></span>
+          <span class="license-time" id="licenseTimeLeft">7d 20h 29m 45s left</span>
+        </div>
+        <div class="license-bar-track">
+          <div class="license-bar-fill" id="licenseBarFill" style="width: 68%;"></div>
+        </div>
+        <div class="license-footer">
+          <span id="licenseExpires">Expires 9/15/2026, 8:15:04 PM</span>
+          <span id="licensePlan">Basic plan · 18 characters</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="top-actions-row">
+      <button class="btn-top-action btn-stop" id="btnToggleBot">
+        <span id="btnBotIcon">⏹</span> <span id="btnBotText">Stop bot</span>
+      </button>
+      <button class="btn-top-action" id="btnAddAccount">
+        <span>+</span> Add account
+      </button>
+      <button class="btn-top-action" id="btnRssTransfer">
+        <span>🔄</span> RSS Transfer
+      </button>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 0.78rem; color: var(--text-dim);" id="lastSyncLabel">Synced just now</span>
+      </div>
+    </div>
+  </header>
+  <!-- MAIN NAVIGATION TABS -->
+  <nav class="main-nav-tabs">
+    <button class="nav-tab active" data-tab="live">Live</button>
+    <button class="nav-tab" data-tab="inventory">Inventory</button>
+    <button class="nav-tab" data-tab="history">History</button>
+    <button class="nav-tab" data-tab="config">Config</button>
+    <button class="nav-tab" data-tab="upgrade">Upgrade</button>
+  </nav>
+
+  <!-- ============================================================== -->
+  <!-- TAB 1: LIVE (Screenshots 4 & 5)                                -->
+  <!-- ============================================================== -->
+  <main class="tab-content active" id="tab-live">
+    <div class="live-grid">
+      
+      <!-- Recent Activity Terminal -->
+      <section class="activity-card">
+        <div class="activity-header">
+          <span class="activity-title">Recent activity</span>
+          <span class="activity-lines-count" id="linesCount">100 lines</span>
+        </div>
+        <div class="terminal-window" id="terminalLog">
+          <!-- Real-time log lines inserted here -->
+        </div>
+      </section>
+
+      <!-- Active Gathering Marches Dashboard Section -->
+      <section class="activity-card" id="cardActiveMarches" style="grid-column: 1 / -1; margin-top: 4px;">
+        <div class="activity-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size: 1.2rem;">⚔️</span>
+            <span class="activity-title" style="font-weight:700;">Active Gathering Marches</span>
+            <span class="badge-running" id="badgeActiveMarchesCount" style="padding: 2px 10px; font-size: 0.72rem;">
+              <span class="dot-pulse" style="width:6px; height:6px;"></span>
+              <span id="txtActiveMarchesCount">2 / 5 Active Marches</span>
+            </span>
+            <span style="font-size:0.78rem; color:var(--text-dim);" id="lblCityTroopsAvail">Available Army: 0 soldiers</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn-action-sm" onclick="goToGatheringConfig()">⚙️ Gathering Settings</button>
+            <button class="btn-action-sm" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border-color:transparent; font-weight:700;" onclick="dispatchGatheringFromUI()">🚀 Dispatch Marches</button>
+          </div>
+        </div>
+        <div class="marches-live-grid" id="marchesLiveGrid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; padding:16px 20px;">
+          <!-- Rendered dynamically by renderMarches() in app.js -->
+        </div>
+      </section>
+
+      <!-- Search Governor Bar -->
+      <div class="search-governor-row">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="liveSearchInput" placeholder="Search governor name, ID, or email">
+      </div>
+
+      <!-- Account Cards Container -->
+      <div id="accountCardsContainer">
+        <!-- Rendered dynamically from backend /api/accounts -->
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ============================================================== -->
+  <!-- TAB 2: INVENTORY (Screenshot 3)                                -->
+  <!-- ============================================================== -->
+  <main class="tab-content" id="tab-inventory">
+    <!-- Resources Gathered Header -->
+    <div class="inventory-section-header">
+      <span class="sec-title">Resources gathered</span>
+      <div class="time-pills">
+        <div class="time-pill" data-time="today">Today</div>
+        <div class="time-pill active" data-time="7days">7 days</div>
+        <div class="time-pill" data-time="30days">30 days</div>
+      </div>
+    </div>
+
+    <!-- 4 Gathered Resource Cards -->
+    <div class="gathered-grid">
+      <!-- Food -->
+      <div class="stat-card-rss">
+        <div class="stat-card-header">
+          <span>Food</span>
+          <span>🌽</span>
+        </div>
+        <div class="stat-card-body">
+          <span class="stat-num-lg" id="invFoodAmt">443.57M</span>
+          <span class="stat-change">+64% vs prev</span>
+        </div>
+        <div class="stat-card-chart">
+          <div class="bar-col" style="height: 30%;"></div>
+          <div class="bar-col" style="height: 45%;"></div>
+          <div class="bar-col" style="height: 55%;"></div>
+          <div class="bar-col" style="height: 40%;"></div>
+          <div class="bar-col" style="height: 75%;"></div>
+          <div class="bar-col" style="height: 90%;"></div>
+          <div class="bar-col highlight" style="height: 100%;"></div>
+        </div>
+      </div>
+
+      <!-- Wood -->
+      <div class="stat-card-rss">
+        <div class="stat-card-header">
+          <span>Wood</span>
+          <span>🪵</span>
+        </div>
+        <div class="stat-card-body">
+          <span class="stat-num-lg" id="invWoodAmt">363.56M</span>
+          <span class="stat-change">+17% vs prev</span>
+        </div>
+        <div class="stat-card-chart">
+          <div class="bar-col" style="height: 25%;"></div>
+          <div class="bar-col" style="height: 35%;"></div>
+          <div class="bar-col" style="height: 40%;"></div>
+          <div class="bar-col" style="height: 50%;"></div>
+          <div class="bar-col" style="height: 60%;"></div>
+          <div class="bar-col" style="height: 55%;"></div>
+          <div class="bar-col highlight" style="height: 95%;"></div>
+        </div>
+      </div>
+
+      <!-- Stone -->
+      <div class="stat-card-rss">
+        <div class="stat-card-header">
+          <span>Stone</span>
+          <span>🪨</span>
+        </div>
+        <div class="stat-card-body">
+          <span class="stat-num-lg" id="invStoneAmt">287.30M</span>
+          <span class="stat-change">+75% vs prev</span>
+        </div>
+        <div class="stat-card-chart">
+          <div class="bar-col" style="height: 20%;"></div>
+          <div class="bar-col" style="height: 30%;"></div>
+          <div class="bar-col" style="height: 40%;"></div>
+          <div class="bar-col" style="height: 35%;"></div>
+          <div class="bar-col" style="height: 70%;"></div>
+          <div class="bar-col" style="height: 65%;"></div>
+          <div class="bar-col highlight" style="height: 90%;"></div>
+        </div>
+      </div>
+
+      <!-- Gold -->
+      <div class="stat-card-rss">
+        <div class="stat-card-header">
+          <span>Gold</span>
+          <span>🪙</span>
+        </div>
+        <div class="stat-card-body">
+          <span class="stat-num-lg" id="invGoldAmt">56.47M</span>
+          <span class="stat-change">+428% vs prev</span>
+        </div>
+        <div class="stat-card-chart">
+          <div class="bar-col" style="height: 15%;"></div>
+          <div class="bar-col" style="height: 20%;"></div>
+          <div class="bar-col" style="height: 25%;"></div>
+          <div class="bar-col" style="height: 30%;"></div>
+          <div class="bar-col" style="height: 45%;"></div>
+          <div class="bar-col" style="height: 60%;"></div>
+          <div class="bar-col highlight" style="height: 85%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="inventory-footnote">
+      522 account cycles completed in this window. Bars show the daily gather trend.
+    </div>
+
+    <!-- In Cities Now -->
+    <div class="inventory-section-header" style="margin-top: 10px;">
+      <span class="sec-title">In cities now</span>
+      <span style="font-size: 0.75rem; color: var(--text-dim);">scanned 3h ago</span>
+    </div>
+
+    <div class="in-cities-grid">
+      <div class="city-rss-box">
+        <span class="city-rss-icon">🌽</span>
+        <div class="city-rss-info">
+          <span class="city-rss-label">Food</span>
+          <span class="city-rss-val" id="cityFood">320.30M</span>
+        </div>
+      </div>
+      <div class="city-rss-box">
+        <span class="city-rss-icon">🪵</span>
+        <div class="city-rss-info">
+          <span class="city-rss-label">Wood</span>
+          <span class="city-rss-val" id="cityWood">296.27M</span>
+        </div>
+      </div>
+      <div class="city-rss-box">
+        <span class="city-rss-icon">🪨</span>
+        <div class="city-rss-info">
+          <span class="city-rss-label">Stone</span>
+          <span class="city-rss-val" id="cityStone">120.88M</span>
+        </div>
+      </div>
+      <div class="city-rss-box">
+        <span class="city-rss-icon">🪙</span>
+        <div class="city-rss-info">
+          <span class="city-rss-label">Gold</span>
+          <span class="city-rss-val" id="cityGold">37.22M</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-Character Breakdown Table -->
+    <div class="inventory-section-header">
+      <span class="sec-title">Per-character breakdown</span>
+      <button class="btn-action-sm">Group by kingdom</button>
+    </div>
+
+    <div class="account-group-card" style="padding: 0; overflow: hidden;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Governor ID</th>
+            <th>Name</th>
+            <th>Kingdom</th>
+            <th>City Hall</th>
+            <th>Power</th>
+            <th>Food</th>
+            <th>Wood</th>
+            <th>Stone</th>
+            <th>Gold</th>
+            <th>Total ▼</th>
+          </tr>
+        </thead>
+        <tbody id="charBreakdownBody">
+          <!-- Populated from backend -->
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <!-- ============================================================== -->
+  <!-- TAB 3: CONFIG (Screenshots 1 & 2)                              -->
+  <!-- ============================================================== -->
+  <main class="tab-content" id="tab-config">
+    <div class="config-container">
+      
+      <!-- Left Config Sidebar -->
+      <aside class="config-sidebar">
+        <div class="cfg-nav-link" data-cfg="general">
+          <span>General</span>
+          <span class="cfg-badge">2</span>
+        </div>
+        <div class="cfg-nav-link active" data-cfg="gathering">
+          <span>Gathering</span>
+          <span class="cfg-badge">8</span>
+        </div>
+        <div class="cfg-nav-link" data-cfg="city">
+          <span>City</span>
+          <span class="cfg-badge">12</span>
+        </div>
+        <div class="cfg-nav-link" data-cfg="combat">
+          <span>Combat</span>
+          <span class="cfg-badge">6</span>
+        </div>
+        <div class="cfg-nav-link" data-cfg="alliance">
+          <span>Alliance</span>
+          <span class="cfg-badge">5</span>
+        </div>
+        <div class="cfg-nav-link" data-cfg="daily">
+          <span>Daily Claims</span>
+          <span class="cfg-badge">13</span>
+        </div>
+        <div class="cfg-nav-link" data-cfg="progression">
+          <span>Account Progression</span>
+          <span class="cfg-badge">6</span>
+        </div>
+        <div class="cfg-nav-link" data-cfg="profiles">
+          <span>Config Profiles</span>
+        </div>
+        <div class="cfg-nav-link" data-cfg="groups">
+          <span>Farm Groups</span>
+        </div>
+      </aside>
+
+      <!-- Right Config Content -->
+      <div class="config-main">
+        
+        <!-- Top Controls Bar -->
+        <div class="config-top-controls">
+          <div class="cfg-control-group">
+            <label class="cfg-label">Account</label>
+            <select class="cfg-select" id="cfgAccountSelect">
+              <option value="teez8888@gmail.com">teez8888@gmail.com</option>
+              <option value="all">All accounts</option>
+            </select>
+          </div>
+          <div class="cfg-control-group">
+            <label class="cfg-label">&nbsp;</label>
+            <input type="text" class="cfg-search-input" placeholder="Find account by governor name">
+          </div>
+          <div class="cfg-control-group">
+            <label class="cfg-label">Apply changes to</label>
+            <select class="cfg-select" id="cfgApplyChanges">
+              <option value="this">This email only</option>
+              <option value="all">All accounts</option>
+            </select>
+          </div>
+          <div class="cfg-control-group">
+            <label class="cfg-label">&nbsp;</label>
+            <input type="text" class="cfg-search-input" placeholder="Search settings">
+          </div>
+        </div>
+
+        <!-- ================= GATHERING PANEL (Screenshot 1) ================= -->
+        <section class="cfg-panel-box" id="panel-gathering">
+          <div class="cfg-target-account" id="cfgActiveAccountName1">teez8888@gmail.com</div>
+          <div class="cfg-panel-heading">Gathering</div>
+          <div class="cfg-panel-desc">
+            Pick how to split your gathering marches across resources. Each + adds one march to that resource, up to 7 total. Set them all to one resource to focus on it.
+          </div>
+
+          <!-- Food March Split -->
+          <div class="rss-split-row">
+            <div class="rss-split-left">
+              <span>🌽</span>
+              <span>Food</span>
+            </div>
+            <div class="rss-counter">
+              <button class="btn-counter" onclick="adjustMarch('food', -1)">-</button>
+              <span class="counter-value" id="cntFoodMarch">1</span>
+              <button class="btn-counter" onclick="adjustMarch('food', 1)">+</button>
+            </div>
+          </div>
+
+          <!-- Wood March Split -->
+          <div class="rss-split-row">
+            <div class="rss-split-left">
+              <span>🪵</span>
+              <span>Wood</span>
+            </div>
+            <div class="rss-counter">
+              <button class="btn-counter" onclick="adjustMarch('wood', -1)">-</button>
+              <span class="counter-value" id="cntWoodMarch">1</span>
+              <button class="btn-counter" onclick="adjustMarch('wood', 1)">+</button>
+            </div>
+          </div>
+
+          <!-- Stone March Split -->
+          <div class="rss-split-row">
+            <div class="rss-split-left">
+              <span>🪨</span>
+              <span>Stone</span>
+            </div>
+            <div class="rss-counter">
+              <button class="btn-counter" onclick="adjustMarch('stone', -1)">-</button>
+              <span class="counter-value" id="cntStoneMarch">1</span>
+              <button class="btn-counter" onclick="adjustMarch('stone', 1)">+</button>
+            </div>
+          </div>
+
+          <!-- Gold March Split -->
+          <div class="rss-split-row">
+            <div class="rss-split-left">
+              <span>🪙</span>
+              <span>Gold</span>
+            </div>
+            <div class="rss-counter">
+              <button class="btn-counter" onclick="adjustMarch('gold', -1)">-</button>
+              <span class="counter-value" id="cntGoldMarch">0</span>
+              <button class="btn-counter" onclick="adjustMarch('gold', 1)">+</button>
+            </div>
+          </div>
+
+          <!-- Max node level -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Max node level</span>
+              <span class="setting-card-desc">
+                Highest resource-node level the bot will gather. Lower this for younger farms / T3 troops so marches don't target high-level nodes they can't drain. "No cap" gathers any level.
+              </span>
+            </div>
+            <select class="cfg-select" id="cfgMaxNodeLevel" style="min-width: 200px;">
+              <option value="No cap">No cap (Highest available)</option>
+              <option value="Level 6 and above">Level 6 and above</option>
+              <option value="Level 6 and below" selected>Level 6 and below</option>
+              <option value="Level 5 and below">Level 5 and below</option>
+              <option value="Level 4 and below">Level 4 and below</option>
+              <option value="Level 3 and below">Level 3 and below</option>
+              <option value="Level 2 and below">Level 2 and below</option>
+              <option value="Level 1 only">Level 1 only</option>
+            </select>
+          </div>
+
+          <!-- Only finish-able nodes -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Only finish-able nodes</span>
+              <span class="setting-card-desc">
+                Only send a gather march to a node it can fully drain. Prevents marches getting stuck part-way through big nodes on low-capacity farms; may leave a march idle if every nearby node is too large.
+              </span>
+            </div>
+            <label class="switch-toggle">
+              <input type="checkbox" id="cfgOnlyFinishable" checked>
+              <span class="slider-round"></span>
+            </label>
+          </div>
+
+          <!-- Skip partially gathered nodes -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Skip partially gathered nodes</span>
+              <span class="setting-card-desc">
+                Only target untouched nodes (at least ~90% of their yield remaining). Nodes another player already gathered from are skipped; nodes whose fill level can't be read are still used. Opt-in — off by default.
+              </span>
+            </div>
+            <label class="switch-toggle">
+              <input type="checkbox" id="cfgSkipPartially" checked>
+              <span class="slider-round"></span>
+            </label>
+          </div>
+
+          <div class="cfg-save-bar" style="display:flex; align-items:center; gap:12px; justify-content:flex-end;">
+            <button class="btn-primary-purple" onclick="saveCurrentConfig()">Save Changes</button>
+            <button class="btn-primary-purple" style="background: linear-gradient(135deg, #10b981, #059669); border:none;" onclick="dispatchGatheringFromUI()">🚀 Dispatch Marches Now</button>
+          </div>
+        </section>
+
+        <!-- ================= CITY PANEL (Screenshot 2) ================= -->
+        <section class="cfg-panel-box" id="panel-city" style="display: none;">
+          <div class="cfg-target-account" id="cfgActiveAccountName2">teez8888@gmail.com</div>
+          <div class="cfg-panel-heading">City</div>
+
+          <!-- Collect city resources -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Collect city resources</span>
+              <span class="setting-card-desc">Collect resources from your production buildings</span>
+            </div>
+            <label class="switch-toggle">
+              <input type="checkbox" id="cfgCollectCity" checked>
+              <span class="slider-round"></span>
+            </label>
+          </div>
+
+          <!-- Produce blacksmith materials -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Produce blacksmith materials</span>
+              <span class="setting-card-desc">Keep basic crafting materials in production at the Blacksmith. Requires City Hall 16.</span>
+            </div>
+            <label class="switch-toggle">
+              <input type="checkbox" id="cfgBlacksmith">
+              <span class="slider-round"></span>
+            </label>
+          </div>
+
+          <!-- Train infantry -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Train infantry</span>
+              <span class="setting-card-desc">Pick the highest tier to train, or Off to skip the barracks.</span>
+            </div>
+            <select class="cfg-select" id="cfgTrainInfantry" style="min-width: 140px;">
+              <option value="T1">T1</option>
+              <option value="T2">T2</option>
+              <option value="T3">T3</option>
+              <option value="T4">T4</option>
+              <option value="T5">T5</option>
+              <option value="Off">Off</option>
+            </select>
+          </div>
+
+          <!-- Train cavalry -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Train cavalry</span>
+              <span class="setting-card-desc">Pick the highest tier to train, or Off to skip the stable.</span>
+            </div>
+            <select class="cfg-select" id="cfgTrainCavalry" style="min-width: 140px;">
+              <option value="T1">T1</option>
+              <option value="T2">T2</option>
+              <option value="T3">T3</option>
+              <option value="T4">T4</option>
+              <option value="T5">T5</option>
+              <option value="Off">Off</option>
+            </select>
+          </div>
+
+          <!-- Train archers -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Train archers</span>
+              <span class="setting-card-desc">Pick the highest tier to train, or Off to skip the archery range.</span>
+            </div>
+            <select class="cfg-select" id="cfgTrainArchers" style="min-width: 140px;">
+              <option value="T1">T1</option>
+              <option value="T2">T2</option>
+              <option value="T3">T3</option>
+              <option value="T4">T4</option>
+              <option value="T5">T5</option>
+              <option value="Off">Off</option>
+            </select>
+          </div>
+
+          <!-- Train siege -->
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Train siege</span>
+              <span class="setting-card-desc">Pick the highest tier to train, or Off to skip the siege workshop. The bot trains the highest unlocked tier at or below your pick.</span>
+            </div>
+            <select class="cfg-select" id="cfgTrainSiege" style="min-width: 140px;">
+              <option value="T1">T1</option>
+              <option value="T2">T2</option>
+              <option value="T3">T3</option>
+              <option value="T4">T4</option>
+              <option value="T5">T5</option>
+              <option value="Off">Off</option>
+            </select>
+          </div>
+
+          <!-- Battle training (PRO ONLY) -->
+          <div class="pro-card-box">
+            <div class="pro-card-header">
+              <span class="pro-title">Battle training</span>
+              <span class="badge-pro">PRO ONLY</span>
+            </div>
+            <div class="pro-desc">
+              Battle training is a Pro feature. Upgrade to Pro to mass-train battle troops toward a ready-troop target or through a per-governor speedup budget.
+            </div>
+            <div class="setting-card" style="background: transparent; border: none; padding: 0;">
+              <div class="setting-card-text">
+                <span class="setting-card-title">Battle training mode</span>
+                <span class="setting-card-desc">Target trains each governor up to a healthy troop total. Speedup budget keeps training until each governor's own balance is spent. Turn this off to resume the normal queue.</span>
+              </div>
+              <select class="cfg-select" id="cfgBattleTraining" style="min-width: 140px;">
+                <option value="Off">Off</option>
+                <option value="Target">Target</option>
+                <option value="Speedup">Speedup</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="cfg-save-bar">
+            <button class="btn-primary-purple" onclick="saveCurrentConfig()">Save Changes</button>
+          </div>
+        </section>
+
+        <!-- ================= GENERAL PANEL ================= -->
+        <section class="cfg-panel-box" id="panel-general" style="display: none;">
+          <div class="cfg-target-account">Global Settings</div>
+          <div class="cfg-panel-heading">General Automation</div>
+          <div class="setting-card">
+            <div class="setting-card-text">
+              <span class="setting-card-title">Recurring Cycle Interval</span>
+              <span class="setting-card-desc">How often the daemon runs gathering & training cycles.</span>
+            </div>
+            <select class="cfg-select" id="cfgIntervalHours" style="min-width: 140px;">
+              <option value="1">Every 1 hour</option>
+              <option value="2">Every 2 hours</option>
+              <option value="3" selected>Every 3 hours</option>
+              <option value="4">Every 4 hours</option>
+            </select>
+          </div>
+          <div class="cfg-save-bar">
+            <button class="btn-primary-purple" onclick="saveCurrentConfig()">Save Changes</button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================================== -->
+  <!-- TAB 4: HISTORY                                                 -->
+  <!-- ============================================================== -->
+  <main class="tab-content" id="tab-history">
+    <div class="account-group-card">
+      <div class="sec-title" style="margin-bottom: 14px;">Execution History & Automation Rounds</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Round</th>
+            <th>Timestamp</th>
+            <th>Action</th>
+            <th>Target</th>
+            <th>Troops Deployed</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>#522</td>
+            <td>11:28:46 PM</td>
+            <td>Smart Gather 3-March</td>
+            <td>Food, Wood, Stone (Lvl 2)</td>
+            <td>36,685 units</td>
+            <td><span style="color:#34d399;">● Completed</span></td>
+          </tr>
+          <tr>
+            <td>#521</td>
+            <td>08:14:12 PM</td>
+            <td>Smart Gather 3-March</td>
+            <td>Food, Wood, Stone (Lvl 2)</td>
+            <td>36,685 units</td>
+            <td><span style="color:#34d399;">● Completed</span></td>
+          </tr>
+          <tr>
+            <td>#520</td>
+            <td>05:02:30 PM</td>
+            <td>Auto-Barracks Training</td>
+            <td>All 4 Barracks (x200)</td>
+            <td>800 trained</td>
+            <td><span style="color:#34d399;">● Completed</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  
+    <!-- ARABIC SYSTEM CHANGELOG -->
+    <div class="account-group-card" style="margin-top:16px;" dir="rtl">
+      <div class="sec-title" style="margin-bottom:14px;font-size:1rem;">
+        &#x1F6E0;&#xFE0F; آخر تحديث للنظام &mdash; سجل الإصلاحات
+      </div>
+
+      <div style="border:1px solid rgba(139,92,246,0.25);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:rgba(139,92,246,0.06);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="background:#7c3aed;color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:20px;font-weight:700;">مُصلح</span>
+          <span style="font-weight:600;font-size:0.92rem;">التدريب ما كان شغال &mdash; أرقام المباني غلط</span>
+        </div>
+        <div style="color:var(--text-dim);font-size:0.83rem;line-height:1.8;">
+          السكريبت كان يستخدم أرقام ثكنات خاطئة
+          <code style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:4px;">31, 70, 71, 72</code>
+          مما يسبب رفض السيرفر لأوامر التدريب. تم التحقق من الأرقام الحقيقية عبر تحليل الباكيتات وتحديثها تلقائياً.
+        </div>
+      </div>
+
+      <div style="border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:rgba(16,185,129,0.05);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="background:#059669;color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:20px;font-weight:700;">مُحسَّن</span>
+          <span style="font-weight:600;font-size:0.92rem;">نظام اكتشاف الثكنات &mdash; أصبح أذكى وأسرع</span>
+        </div>
+        <div style="color:var(--text-dim);font-size:0.83rem;line-height:1.8;">
+          قبل: البوت ينتظر 3 ثوانٍ فقط ولا يطرق الباب. الآن: يرسل إشارة
+          <code style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:4px;">Opcode 303</code>
+          فور الدخول لإجبار السيرفر على إرسال بيانات المباني، ويبحث بعمق كامل، ويصبر 8 ثوانٍ.
+          النتيجة: يكتشف كل 4 ثكنات فوراً.
+        </div>
+      </div>
+
+      <div style="border:1px solid rgba(245,158,11,0.25);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:rgba(245,158,11,0.05);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="background:#d97706;color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:20px;font-weight:700;">جديد</span>
+          <span style="font-weight:600;font-size:0.92rem;">دعم أرقام ثكنات مستقلة لكل شخصية</span>
+        </div>
+        <div style="color:var(--text-dim);font-size:0.83rem;line-height:1.8;">
+          أُضيف حقل
+          <code style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:4px;">barracks_ids</code>
+          لكل شخصية في ملف
+          <code style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:4px;">accounts_fleet.json</code>.
+          الشخصية الأولى لها أرقامها المؤكدة من التحليل، والثانية تعتمد على الاكتشاف التلقائي.
+        </div>
+      </div>
+
+      <div style="border:1px solid rgba(99,102,241,0.3);border-radius:10px;padding:14px 16px;background:rgba(99,102,241,0.05);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="background:#4f46e5;color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:20px;font-weight:700;">نتائج الاختبار</span>
+          <span style="font-weight:600;font-size:0.92rem;">آخر جولة تدريب</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:10px 14px;">
+            <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;">231250589 (Char 1)</div>
+            <div style="color:#34d399;font-weight:600;font-size:0.9rem;">&#x2705; 4/4 ثكنات دُربت بنجاح</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:10px 14px;">
+            <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;">231250084 (Char 2)</div>
+            <div style="color:#fbbf24;font-weight:600;font-size:0.9rem;">&#x23F3; الثكنات مشغولة &mdash; تدريب سابق</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+</main>
+
+  <!-- ============================================================== -->
+  <!-- TAB 5: UPGRADE                                                 -->
+  <!-- ============================================================== -->
+  <main class="tab-content" id="tab-upgrade">
+    <div class="account-group-card" style="text-align: center; padding: 40px;">
+      <div style="font-size: 2rem; margin-bottom: 8px;">⚡ Upgrade to Pro</div>
+      <div style="color: var(--text-dim); max-width: 500px; margin: 0 auto 24px;">
+        Unlock mass battle training, automated speedup expenditure, and unlimited character slots for your entire farm empire.
+      </div>
+      <button class="btn-primary-purple" style="font-size: 1rem; padding: 12px 32px;">
+        Upgrade Now (7 Days Remaining)
+      </button>
+    </div>
+  </main>
+
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

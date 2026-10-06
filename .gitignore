@@ -1,0 +1,44 @@
+# --- sensitive — NEVER commit ---
+accounts.json
+fingerprints.json
+profiles/
+accounts/
+sts_tokens.json
+proxies.json
+session.ipc
+captcha_api_key.txt
+*.pem
+auth_flow.json
+login_capture*.json*
+game_capture.pcap
+token_exchange_schema.json
+
+# --- archived capture data (3.5GB moved on 2026-08-11) ---
+_archive/
+
+# --- caches / runtime ---
+__pycache__/
+*.pyc
+.ruff_cache/
+.tshark_pid
+*.ipc
+
+# --- raw capture artifacts (defense in depth) ---
+*.etl
+*.etl.tmp
+*.pcap
+*.pcapng
+*.tsv
+*.bmp
+*.raw
+*keylog*
+frida_*.json
+frida_*.log
+screen*.png
+screenshot*.png
+*_capture*.json*
+*_capture*.txt
+*_capture*.log
+# ...but keep the verified reference captures tracked
+!command_capture.jsonl
+!verify_capture.jsonl

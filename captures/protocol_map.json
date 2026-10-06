@@ -1,0 +1,184 @@
+{
+  "opcode_3": {
+    "opcode": 3,
+    "hex": "0x03",
+    "count": 2,
+    "size_range": "26-26",
+    "top_fields": [
+      3,
+      6
+    ],
+    "sub_fields": [
+      1,
+      2
+    ]
+  },
+  "opcode_5": {
+    "opcode": 5,
+    "hex": "0x05",
+    "count": 2,
+    "size_range": "10217-10651",
+    "top_fields": [
+      3,
+      21
+    ],
+    "sub_fields": [
+      1,
+      2
+    ]
+  },
+  "opcode_7": {
+    "opcode": 7,
+    "hex": "0x07",
+    "count": 12,
+    "size_range": "8-8",
+    "top_fields": [
+      3,
+      8
+    ],
+    "sub_fields": [
+      1
+    ]
+  },
+  "opcode_12": {
+    "opcode": 12,
+    "hex": "0x0c",
+    "count": 24,
+    "size_range": "410-9806",
+    "top_fields": [
+      3,
+      12
+    ],
+    "sub_fields": [
+      1,
+      2
+    ]
+  },
+  "opcode_15": {
+    "opcode": 15,
+    "hex": "0x0f",
+    "count": 4,
+    "size_range": "9-9",
+    "top_fields": [
+      3,
+      16
+    ],
+    "sub_fields": [
+      1
+    ]
+  },
+  "opcode_19": {
+    "opcode": 19,
+    "hex": "0x13",
+    "count": 17,
+    "size_range": "263-2237",
+    "top_fields": [
+      3,
+      23
+    ],
+    "sub_fields": [
+      1,
+      2
+    ]
+  },
+  "opcode_27": {
+    "opcode": 27,
+    "hex": "0x1b",
+    "count": 8,
+    "size_range": "440-2638",
+    "top_fields": [
+      3,
+      54
+    ],
+    "sub_fields": [
+      1
+    ]
+  },
+  "opcode_39": {
+    "opcode": 39,
+    "hex": "0x27",
+    "count": 4,
+    "size_range": "27-39",
+    "top_fields": [
+      3,
+      26
+    ],
+    "sub_fields": [
+      1
+    ]
+  },
+  "opcode_43": {
+    "opcode": 43,
+    "hex": "0x2b",
+    "count": 1,
+    "size_range": "9-9",
+    "top_fields": [
+      3,
+      30
+    ],
+    "sub_fields": [
+      1
+    ]
+  },
+  "opcode_53": {
+    "opcode": 53,
+    "hex": "0x35",
+    "count": 2,
+    "size_range": "9-23",
+    "top_fields": [
+      3,
+      36
+    ],
+    "sub_fields": [
+      1
+    ]
+  },
+  "opcode_101": {
+    "opcode": 101,
+    "hex": "0x65",
+    "count": 72,
+    "size_range": "428-668",
+    "top_fields": [
+      13
+    ],
+    "sub_fields": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      10,
+      15
+    ]
+  },
+  "opcode_147": {
+    "opcode": 147,
+    "hex": "0x93",
+    "count": 4,
+    "size_range": "17-74",
+    "top_fields": [
+      3,
+      96
+    ],
+    "sub_fields": [
+      1,
+      8
+    ]
+  },
+  "opcode_171": {
+    "opcode": 171,
+    "hex": "0xab",
+    "count": 4,
+    "size_range": "622-633",
+    "top_fields": [
+      3,
+      112
+    ],
+    "sub_fields": [
+      1
+    ]
+  }
+}

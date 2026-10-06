@@ -1,0 +1,47 @@
+{
+  "getval_enters": [],
+  "getval_returns": [],
+  "func_entries": [
+    {
+      "t": "func63590_entry",
+      "regs": {
+        "rax": "0x68b79b18",
+        "rbx": "0x39be5760",
+        "rcx": "0x68b79b18",
+        "rdx": "0x39be5760",
+        "rsi": "0x00000004",
+        "rdi": "0x000002f0",
+        "r8": "0x00000000",
+        "r9": "0x00000000"
+      }
+    }
+  ],
+  "seed_inits": [
+    {
+      "t": "seed_init",
+      "ch": 1,
+      "ecx": "0x2607dd00",
+      "regs": {
+        "rax": "0x13bf9bc0",
+        "rbx": "0x72cd9518",
+        "rcx": "0x2607dd00",
+        "rdx": "0x72cd9784",
+        "rsi": "0x2607dd00",
+        "rdi": "0x13bf9bc0"
+      }
+    },
+    {
+      "t": "seed_init",
+      "ch": 2,
+      "ecx": "0x13bf9bc0",
+      "regs": {
+        "rax": "0x49325647",
+        "rbx": "0x72cd9518",
+        "rcx": "0x13bf9bc0",
+        "rdx": "0x72cdaac8",
+        "rsi": "0x2607dd00",
+        "rdi": "0x13bf9bc0"
+      }
+    }
+  ]
+}
