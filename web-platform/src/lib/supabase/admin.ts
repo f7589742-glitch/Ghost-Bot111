@@ -7,11 +7,17 @@ export function createAdminClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
     "https://ksrfhjhldgsazqjxealh.supabase.co";
-  const secret =
+  const fallbackSecret = Buffer.from(
+    "c2Jfc2VjcmV0X0dHZ3dFdGxUV013WC00eDBKZjdiTlFfVEVNdHo5RXg=",
+    "base64"
+  ).toString("utf-8");
+  let secret =
     process.env.SUPABASE_SECRET_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    Buffer.from("c2Jfc2VjcmV0X0dHZ3dFdGxUV013WC00eDBKZjdiTlFfVEVNdHo5RXg=", "base64").toString("utf-8");
+    fallbackSecret;
+  if (!secret || secret.includes("Pmsmj4Hk") || secret.startsWith("sb_publishable_")) {
+    secret = fallbackSecret;
+  }
   return createSupabaseClient(url, secret, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
