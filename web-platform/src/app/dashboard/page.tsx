@@ -281,6 +281,18 @@ export default function DashboardPage() {
   const activeBot: any = availableBots.find((b) => b.id === selectedBotId || b.bot_id === selectedBotId) || (availableBots.length > 0 ? availableBots[0] : null);
   const accounts = activeBot ? (accountsByBot[activeBot.id] || accountsByBot[activeBot.bot_id] || []) : [];
 
+  const navigateToShop = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      router.push("/shop");
+    } catch {
+      window.location.href = "/shop";
+    }
+  };
+
   // Bot Status Poller (Scoped strictly to Active Bot Key and User ID)
   const checkStatus = async (targetBotKey?: string) => {
     try {
@@ -1958,7 +1970,12 @@ export default function DashboardPage() {
               {lang === "ar" ? "قم بشراء أو تفعيل وحدة جديدة للبدء وإدارة مزارعك السحابية المعزولة بأمان." : "Purchase or activate a new cloud bot unit from the store to deploy your isolated fleet."}
             </p>
             <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap" }}>
-              <Link href="/shop" className="btn-cyan-glow" style={{ padding: "12px 28px", fontSize: "13px", fontWeight: 800, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <Link
+                href="/shop"
+                onClick={navigateToShop}
+                className="btn-cyan-glow"
+                style={{ padding: "12px 28px", fontSize: "13px", fontWeight: 800, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
+              >
                 <span>{lang === "ar" ? "🛒 الانتقال للمتجر وشراء وحدة سحابية ←" : "🛒 Go to Store & Deploy Bot Unit ←"}</span>
               </Link>
               <button
@@ -2309,7 +2326,12 @@ export default function DashboardPage() {
                         {lang === "ar" ? "قم بشراء أو تفعيل وحدة جديدة للبدء وإدارة مزارعك السحابية المعزولة." : "Purchase or activate a new cloud bot unit from the store to get started."}
                       </p>
                       <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
-                        <Link href="/shop" className="btn-cyan-glow" style={{ padding: "10px 24px", fontSize: "12.5px", fontWeight: 800, textDecoration: "none", display: "inline-block" }}>
+                        <Link
+                          href="/shop"
+                          onClick={navigateToShop}
+                          className="btn-cyan-glow"
+                          style={{ padding: "10px 24px", fontSize: "12.5px", fontWeight: 800, textDecoration: "none", display: "inline-block", cursor: "pointer" }}
+                        >
                           {lang === "ar" ? "🛒 الانتقال للمتجر وشراء وحدة سحابية ←" : "🛒 Go to Store & Deploy Unit ←"}
                         </Link>
                       </div>
@@ -2375,7 +2397,12 @@ export default function DashboardPage() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <Link href="/shop" className="btn-ghost-outline" style={{ padding: "8px 16px", fontSize: "11.5px", textDecoration: "none" }}>
+                <Link
+                  href="/shop"
+                  onClick={navigateToShop}
+                  className="btn-ghost-outline"
+                  style={{ padding: "8px 16px", fontSize: "11.5px", textDecoration: "none", cursor: "pointer" }}
+                >
                   {t("btn_new_license", "+ شراء رخصة سحابية")}
                 </Link>
               </div>
@@ -2419,7 +2446,12 @@ export default function DashboardPage() {
                   <svg className="gb-icon"><use href="#icon-cyber-mail"/></svg>
                   <span>{lang === "ar" ? "بريد التحديثات" : "Update Mail"}</span>
                 </button>
-                <Link href="/shop" className="btn-cyan-glow" style={{ padding: "10px", fontSize: "12px", justifyContent: "center", textDecoration: "none" }}>
+                <Link
+                  href="/shop"
+                  onClick={navigateToShop}
+                  className="btn-cyan-glow"
+                  style={{ padding: "10px", fontSize: "12px", justifyContent: "center", textDecoration: "none", cursor: "pointer" }}
+                >
                   <svg className="gb-icon"><use href="#icon-commander-badge"/></svg>
                   <span>{lang === "ar" ? "المتجر السحابي" : "Cloud Store"}</span>
                 </Link>

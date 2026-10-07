@@ -121,8 +121,13 @@ export default function TacticalSidebar({ bots }: TacticalSidebarProps) {
               <Link
                 key={link.href}
                 href={link.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  router.push(link.href);
+                }}
                 className={`side-link ${active ? "active" : ""}`}
                 data-nav={link.nav}
+                style={{ cursor: "pointer" }}
               >
                 {link.nav === "overview" && (
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -154,7 +159,14 @@ export default function TacticalSidebar({ bots }: TacticalSidebarProps) {
         {/* 4. Deployed Units Stack */}
         <div className="sidebar-section-title">
           <span>{t("deployed_units", "الوحدات السحابية")} ({displayBots.length})</span>
-          <Link href="/shop" style={{ color: "var(--ghost-cyan)", cursor: "pointer" }}>
+          <Link
+            href="/shop"
+            onClick={(e) => {
+              e.preventDefault();
+              router.push("/shop");
+            }}
+            style={{ color: "var(--ghost-cyan)", cursor: "pointer" }}
+          >
             {t("add_store", "+ متجر الوحدات")}
           </Link>
         </div>
@@ -179,6 +191,10 @@ export default function TacticalSidebar({ bots }: TacticalSidebarProps) {
               </div>
               <Link
                 href="/shop"
+                onClick={(e) => {
+                  e.preventDefault();
+                  router.push("/shop");
+                }}
                 className="btn-ghost-primary"
                 style={{
                   padding: "5px 10px",
@@ -189,6 +205,7 @@ export default function TacticalSidebar({ bots }: TacticalSidebarProps) {
                   background: "linear-gradient(135deg, rgba(0,229,255,0.2), rgba(0,229,255,0.08))",
                   border: "1px solid rgba(0,229,255,0.4)",
                   color: "#00e5ff",
+                  cursor: "pointer",
                 }}
               >
                 {t("create_first_unit", "تفعيل أول وحدة بوت سحابية ←")}
