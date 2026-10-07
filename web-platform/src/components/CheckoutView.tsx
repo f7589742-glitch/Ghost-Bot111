@@ -64,37 +64,46 @@ export default function CheckoutView({ itemId, itemName, initialReferral = '' }:
       return;
     }
 
-    let seq = 1;
     try {
-      const supabase = createClient();
-      const { count } = await supabase
-        .from("bot_instances")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
-      seq = (count || 0) + 1;
-    } catch {
-      seq = 1;
-    }
+      const provRes = await fetch("/api/bots/provision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product: itemId === "gem-bot" ? "gem-bot" : "farm-bot",
+          tier,
+          slots: characterCount,
+          duration: billingDays,
+          pay_method: "PayPal / Cards",
+          amount: String(totalPrice),
+          custom_name: effectiveRoom.trim() || undefined,
+        }),
+      });
+      const provData = await provRes.json();
+      if (!provRes.ok || !provData.success) {
+        setOrderErr(provData.error || "Failed to provision global bot unit");
+        return;
+      }
 
-    const botSlug = `bot-${user.id.slice(0, 8)}-${seq}`;
-    const id = botSlug;
-    const bot = {
-      id,
-      bot_id: botSlug,
-      product: (itemId === 'gem-bot' ? 'gem-bot' : 'farm-bot') as 'farm-bot' | 'gem-bot',
-      label: `${itemName} #${seq}`,
-      tier,
-      slots: characterCount,
-      days: billingDays,
-      room: effectiveRoom.trim() || botSlug,
-      ref: referralCode.trim(),
-      total: totalPrice,
-      createdAt: Date.now(),
-    };
-    saveBot(bot);
-    createCloudBot(bot);
-    setOrderId(botSlug);
-    setPlaced(true);
+      const botSlug = provData.bot_id;
+      const bot = {
+        id: provData.bot.id,
+        bot_id: botSlug,
+        product: (itemId === 'gem-bot' ? 'gem-bot' : 'farm-bot') as 'farm-bot' | 'gem-bot',
+        label: provData.name,
+        tier,
+        slots: characterCount,
+        days: billingDays,
+        room: botSlug,
+        ref: referralCode.trim(),
+        total: totalPrice,
+        createdAt: Date.now(),
+      };
+      saveBot(bot);
+      setOrderId(botSlug);
+      setPlaced(true);
+    } catch (e: any) {
+      setOrderErr(e?.message || "Order placement failed");
+    }
   }
 
   const [tier, setTier] = useState<'basic' | 'pro'>('basic');

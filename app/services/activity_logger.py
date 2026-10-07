@@ -242,7 +242,7 @@ class TenantActivityStream:
         except Exception:
             pass
         bid = cls._normalize(bot_id, char_name)
-        timestamp = time.strftime("%I:%M:%S %p")
+        timestamp = datetime.now(timezone.utc).isoformat()
         ar_line = cls._prefix(char_name, message or "")
         en_line = cls._prefix(char_name, message_en) if message_en else None
         content_sig = ar_line
@@ -272,9 +272,10 @@ class TenantActivityStream:
     @classmethod
     def _render(cls, entry: Tuple[str, str, Optional[str]], lang: str) -> str:
         ts, ar, en = entry
+        formatted_ts = f"[{ts}]" if not ts.startswith("[") else ts
         if lang == "en" and en:
-            return f"{ts} {en}"
-        return f"{ts} {ar}"
+            return f"{formatted_ts} {en}"
+        return f"{formatted_ts} {ar}"
 
     @classmethod
     def get_buffer(cls, bot_id: str, user_id: Optional[str] = None, lang: str = "ar") -> List[str]:

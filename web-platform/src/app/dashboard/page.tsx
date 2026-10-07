@@ -593,11 +593,41 @@ export default function DashboardPage() {
     return language === "ar" ? `خلال ${minutes} د ${seconds} ث` : `in ${minutes}m ${seconds}s`;
   };
 
-  // Activity Log Parser to categorize stream into (gather, train, alliance, city, system)
+  function formatLocalTime(timestamp: any): string {
+    try {
+      const d = new Date(timestamp);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      }
+    } catch {}
+    return String(timestamp);
+  }
+
+  // Activity Log Parser to categorize stream into (gather, train, alliance, city, system) with local client machine time
   const parseActivityLine = (line: string, index: number) => {
-    const timeMatch = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?)/i);
-    const timeStr = timeMatch ? `[${timeMatch[1]}]` : "[LIVE]";
-    const remaining = timeMatch ? line.slice(timeMatch[0].length).trim() : line;
+    // 1. Try matching ISO-8601 timestamp (e.g. 2026-10-07T11:33:43.123Z or [2026-10-07T11:33:43Z])
+    const isoMatch = line.match(/^\[?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)\]?/i);
+    let timeStr = "[LIVE]";
+    let remaining = line;
+
+    if (isoMatch) {
+      timeStr = `[${formatLocalTime(isoMatch[1])}]`;
+      remaining = line.slice(isoMatch[0].length).trim();
+    } else {
+      // 2. Try matching time format e.g. 11:33:43 AM or [11:33:43 UTC]
+      const timeMatch = line.match(/^\[?(\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?(?:\s*UTC)?)\]?/i);
+      if (timeMatch) {
+        const rawTime = timeMatch[1].trim();
+        if (rawTime.toUpperCase().includes("UTC")) {
+          const cleanT = rawTime.replace(/UTC/i, "").trim();
+          const todayIso = new Date().toISOString().slice(0, 10);
+          timeStr = `[${formatLocalTime(`${todayIso}T${cleanT}Z`)}]`;
+        } else {
+          timeStr = `[${rawTime}]`;
+        }
+        remaining = line.slice(timeMatch[0].length).trim();
+      }
+    }
 
     let cat = "system";
     const low = line.toLowerCase();

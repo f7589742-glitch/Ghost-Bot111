@@ -611,7 +611,7 @@ export default function AdminConsolePage() {
                 </tr>
               ) : (
                 filteredUsers.map((user) => {
-                  const isOwnerItem = user.role === "owner" || user.discord_id === "775687774417321994";
+                  const isOwnerItem = user.id === "0b13598d-6a29-4e16-8ad3-b937824294e9" || user.discord_id === "775687774417321994";
                   const hasRooms = user.rooms && user.rooms.length > 0;
                   const isExpanded = Boolean(expandedRooms[user.id]);
 

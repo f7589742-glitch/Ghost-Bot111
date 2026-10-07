@@ -664,9 +664,33 @@ export default function BotDetailPage() {
     };
   }, [tab, bot, id]);
 
+  function formatLogLineLocal(line: string): string {
+    try {
+      const isoMatch = line.match(/^\[?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)\]?/i);
+      if (isoMatch) {
+        const d = new Date(isoMatch[1]);
+        if (!isNaN(d.getTime())) {
+          const localT = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+          return `[${localT}] ${line.slice(isoMatch[0].length).trim()}`;
+        }
+      }
+      const timeMatch = line.match(/^\[?(\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?(?:\s*UTC)?)\]?/i);
+      if (timeMatch && timeMatch[1].toUpperCase().includes("UTC")) {
+        const cleanT = timeMatch[1].replace(/UTC/i, "").trim();
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const d = new Date(`${todayIso}T${cleanT}Z`);
+        if (!isNaN(d.getTime())) {
+          const localT = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+          return `[${localT}] ${line.slice(timeMatch[0].length).trim()}`;
+        }
+      }
+    } catch {}
+    return line;
+  }
+
   // Hard DOM buffer cap: render only the latest 100 lines — the DOM can
   // never exceed the backend FIFO cap, so every commit stays < 16ms.
-  const displayLogs = useMemo(() => recentLines.slice(-100), [recentLines]);
+  const displayLogs = useMemo(() => recentLines.slice(-100).map(formatLogLineLocal), [recentLines]);
 
   useEffect(() => {
     const el = logRef.current;

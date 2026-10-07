@@ -96,19 +96,9 @@ export function Sidebar() {
   ];
 
   async function handleSignOut() {
-    try {
-      if (typeof window !== "undefined") {
-        localStorage.clear();
-        sessionStorage.clear();
-      }
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      await supabase.auth.signOut();
-      if (clearStore) clearStore();
-      const { resetOwnerCache } = await import("@/lib/cloud");
-      resetOwnerCache();
-    } catch {}
-    router.push("/login");
+    if (clearStore) clearStore();
+    const { performSignOut } = await import("@/lib/authSignOut");
+    await performSignOut("/login");
   }
 
   const displayName = profile?.username || tenant?.username || (tenant?.email ? tenant.email.split("@")[0] : "Rey PRO");
@@ -232,12 +222,10 @@ export function Sidebar() {
             )}
             <div className="flex flex-col leading-tight min-w-0">
               {Boolean(
-                profile?.role === "owner" ||
-                profile?.role === "admin" ||
+                user?.id === "0b13598d-6a29-4e16-8ad3-b937824294e9" ||
                 user?.user_metadata?.provider_id === "775687774417321994" ||
                 user?.user_metadata?.sub === "775687774417321994" ||
-                user?.email?.toLowerCase().includes("rey") ||
-                user?.email?.toLowerCase().includes("malek")
+                profile?.discord_id === "775687774417321994"
               ) && (
                 <Link
                   href="/admin"

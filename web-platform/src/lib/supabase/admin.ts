@@ -30,15 +30,8 @@ function envList(name: string): string[] {
     .filter(Boolean);
 }
 
-const KNOWN_ADMINS = new Set([
-  "malek.11332",
-  "malek",
-  "mr.malek",
-  "fm434136@gmail.com",
-  "teez8888@gmail.com",
-  "0b13598d-6a29-4e16-8ad3-b937824294e9",
-  "775687774417321994",
-]);
+const TARGET_OWNER_UID = "0b13598d-6a29-4e16-8ad3-b937824294e9";
+const TARGET_OWNER_DISCORD_ID = "775687774417321994";
 
 // Discord snowflake of the signed-in user, read from the Supabase
 // Discord identity (identity_data.sub) with metadata fallbacks.
@@ -65,77 +58,22 @@ export function getDiscordId(
   return null;
 }
 
-// Extract all possible usernames, handles, and emails associated with the user
-export function getUserHandles(user: any): string[] {
-  if (!user) return [];
-  const handles = new Set<string>();
-  if (user.email) handles.add(String(user.email).toLowerCase().trim());
-
-  const meta = user.user_metadata || {};
-  for (const k of ["user_name", "preferred_username", "name", "full_name"]) {
-    if (meta[k] && typeof meta[k] === "string") {
-      handles.add(meta[k].toLowerCase().trim());
-    }
-  }
-  if (meta.custom_claims?.global_name && typeof meta.custom_claims.global_name === "string") {
-    handles.add(meta.custom_claims.global_name.toLowerCase().trim());
-  }
-
-  for (const ident of user.identities || []) {
-    const d = ident.identity_data || {};
-    for (const k of ["user_name", "preferred_username", "name", "full_name", "email"]) {
-      if (d[k] && typeof d[k] === "string") {
-        handles.add(d[k].toLowerCase().trim());
-      }
-    }
-  }
-  return Array.from(handles);
-}
-
-// Owner/admin gate: Discord ID allowlist OR admin email allowlist OR username allowlist.
-export function isAdminUser(
-  user: { email?: string | null; identities?: any[]; user_metadata?: any } | null
-): boolean {
-  if (!user) return false;
-
-  // 1. Direct match with malek.11332 or known owner identifiers
-  const did = getDiscordId(user);
-  if (did && KNOWN_ADMINS.has(did)) return true;
-
-  const handles = getUserHandles(user);
-  for (const h of handles) {
-    if (
-      KNOWN_ADMINS.has(h) ||
-      h === "malek.11332" ||
-      h.includes("malek.11332") ||
-      h.includes("11332")
-    ) {
-      return true;
-    }
-  }
-
-  // 2. Allowlist via environment variables
-  const emails = envList("ADMIN_EMAILS");
-  if (user.email && emails.includes(user.email.toLowerCase())) return true;
-
-  const ids = envList("ADMIN_DISCORD_IDS");
-  if (did && ids.includes(did)) return true;
-
-  const envUsers = envList("ADMIN_USERNAMES");
-  for (const h of handles) {
-    if (envUsers.includes(h)) return true;
-  }
-
-  return false;
-}
-
+// Strict Owner & Admin verification:
+// Exclusively restricted to target Discord ID 775687774417321994 or UID 0b13598d-6a29-4e16-8ad3-b937824294e9.
+// All other accounts strictly evaluate to false.
 export function isOwnerUser(
   user: { id?: string; email?: string | null; identities?: any[]; user_metadata?: any } | null
 ): boolean {
   if (!user) return false;
-  if (user.id && (user.id === "0b13598d-6a29-4e16-8ad3-b937824294e9" || KNOWN_ADMINS.has(user.id))) return true;
-  if (user.email && (user.email.toLowerCase() === "fm434136@gmail.com" || user.email.toLowerCase() === "teez8888@gmail.com")) return true;
+  if (user.id === TARGET_OWNER_UID) return true;
   const did = getDiscordId(user);
-  if (did && (did === "775687774417321994" || KNOWN_ADMINS.has(did))) return true;
-  return isAdminUser(user);
+  if (did === TARGET_OWNER_DISCORD_ID) return true;
+  return false;
 }
+
+export function isAdminUser(
+  user: { id?: string; email?: string | null; identities?: any[]; user_metadata?: any } | null
+): boolean {
+  return isOwnerUser(user);
+}
+

@@ -121,64 +121,97 @@ export default function ShopPage() {
   async function handleFinalOrder() {
     setSubmitting(true);
     try {
-      const nextSeq = (bots?.length || 0) + 1;
-      const botSlug = applyMode === "new" ? `bot-${nextSeq}` : (selectedBotId || `bot-${nextSeq}`);
-      const finalName = applyMode === "new" ? (botName || `${userName}'s Farm Bot #${nextSeq}`) : (bots.find(b => b.bot_id === selectedBotId)?.name || botName);
+      if (!user?.id) {
+        alert("يجب تسجيل الدخول بحساب ديسكورد لإتمام الطلب / Please sign in to place order.");
+        router.push("/login");
+        return;
+      }
 
-      // Create new order record
-      const newOrder: OrderRecord = {
-        id: `GB-${Math.floor(10000 + Math.random() * 90000)}`,
-        bot_id: botSlug,
-        name: finalName,
-        product: selectedProduct,
-        tier: tier,
-        slots: chars,
-        duration: duration,
-        amount: finalTotal,
-        pay_method: payMethod === "usdt" ? "USDT (TRC20)" : payMethod === "binance" ? "Binance Pay" : payMethod === "btc" ? "Bitcoin (BTC)" : "PayPal & Cards",
-        created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + duration * 86400000).toISOString(),
-        status: "active",
-      };
+      let botSlug = selectedBotId || "bot-0";
+      let finalName = botName || `${userName}'s Farm Bot`;
 
-      saveNewOrder(newOrder, user?.id || "guest");
-
-      if (user?.id) {
-        const { data: botInstanceData } = await supabase
-          .from("bot_instances")
-          .upsert(
-            {
-              user_id: user.id,
-              bot_id: botSlug,
-              name: finalName,
-              product: selectedProduct,
-              tier: tier,
-              slots: chars,
-              status: "active",
-              config: {},
-              expires_at: newOrder.expires_at,
-            },
-            { onConflict: "user_id, bot_id" }
-          )
-          .select("id")
-          .single();
-
-        await supabase
-          .from("invoices")
-          .insert({
-            user_id: user.id,
-            bot_instance_id: botInstanceData?.id || null,
-            invoice_number: newOrder.id,
-            product_name: finalName,
+      if (applyMode === "new") {
+        // Call central autoincrementing global room provisioner
+        const provRes = await fetch("/api/bots/provision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            product: selectedProduct,
             tier: tier,
             slots: chars,
-            billing_cycle: (duration as number) === 365 ? "yearly" : (duration as number) === 90 ? "quarterly" : "monthly",
-            amount: parseFloat(finalTotal) || 0,
-            currency: "USD",
-            status: "active",
-            payment_method: payMethod === "usdt" ? "USDT (TRC20)" : payMethod === "binance" ? "Binance Pay" : payMethod === "btc" ? "Bitcoin" : "PayPal / Card",
-            expires_at: newOrder.expires_at,
-          });
+            duration: duration,
+            pay_method: payMethod === "usdt" ? "USDT (TRC20)" : payMethod === "binance" ? "Binance Pay" : payMethod === "btc" ? "Bitcoin (BTC)" : "PayPal & Cards",
+            amount: finalTotal,
+            custom_name: botName,
+          }),
+        });
+
+        const provData = await provRes.json();
+        if (!provRes.ok || !provData.success) {
+          throw new Error(provData.error || "Failed to provision global bot unit");
+        }
+
+        botSlug = provData.bot_id;
+        finalName = provData.name;
+
+        // Save to local orders cache
+        const newOrder: OrderRecord = {
+          id: provData.invoice_number,
+          bot_id: botSlug,
+          name: finalName,
+          product: selectedProduct,
+          tier: tier,
+          slots: chars,
+          duration: duration,
+          amount: finalTotal,
+          pay_method: payMethod === "usdt" ? "USDT (TRC20)" : payMethod === "binance" ? "Binance Pay" : payMethod === "btc" ? "Bitcoin (BTC)" : "PayPal & Cards",
+          created_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + duration * 86400000).toISOString(),
+          status: "active",
+        };
+        saveNewOrder(newOrder, user.id);
+      } else {
+        // Extending an existing bot unit
+        const existingBot = bots.find(b => b.bot_id === selectedBotId);
+        botSlug = selectedBotId;
+        finalName = existingBot?.name || botName || `${userName}'s Farm Bot`;
+        const newExpires = new Date(Date.now() + duration * 86400000).toISOString();
+
+        await supabase
+          .from("bot_instances")
+          .update({ expires_at: newExpires, tier: tier, slots: chars })
+          .eq("bot_id", botSlug)
+          .eq("user_id", user.id);
+
+        const newOrder: OrderRecord = {
+          id: `GB-${Math.floor(10000 + Math.random() * 90000)}`,
+          bot_id: botSlug,
+          name: finalName,
+          product: selectedProduct,
+          tier: tier,
+          slots: chars,
+          duration: duration,
+          amount: finalTotal,
+          pay_method: payMethod === "usdt" ? "USDT (TRC20)" : payMethod === "binance" ? "Binance Pay" : payMethod === "btc" ? "Bitcoin (BTC)" : "PayPal & Cards",
+          created_at: new Date().toISOString(),
+          expires_at: newExpires,
+          status: "active",
+        };
+        saveNewOrder(newOrder, user.id);
+
+        await supabase.from("invoices").insert({
+          user_id: user.id,
+          invoice_number: newOrder.id,
+          product_name: finalName,
+          tier: tier,
+          slots: chars,
+          billing_cycle: (duration as number) === 365 ? "yearly" : (duration as number) === 90 ? "quarterly" : "monthly",
+          amount: parseFloat(finalTotal) || 0,
+          currency: "USD",
+          status: "active",
+          payment_method: payMethod === "usdt" ? "USDT (TRC20)" : payMethod === "binance" ? "Binance Pay" : payMethod === "btc" ? "Bitcoin" : "PayPal / Card",
+          expires_at: newExpires,
+        });
       }
 
       setCreatedBotSlug(botSlug);

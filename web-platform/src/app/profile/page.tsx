@@ -91,12 +91,9 @@ export default function ProfilePage() {
 
   const isOwner =
     user?.id === "0b13598d-6a29-4e16-8ad3-b937824294e9" ||
-    user?.email?.toLowerCase() === "fm434136@gmail.com" ||
-    user?.email?.toLowerCase() === "teez8888@gmail.com" ||
-    profile?.role === "owner" ||
-    profile?.role === "admin" ||
     discordId === "775687774417321994" ||
-    discordName.toLowerCase().includes("malek");
+    (user?.user_metadata as any)?.provider_id === "775687774417321994" ||
+    (user?.user_metadata as any)?.sub === "775687774417321994";
 
   const handleCopyId = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -121,13 +118,9 @@ export default function ProfilePage() {
   };
 
   const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      if (clearStore) clearStore();
-      router.push("/login");
-    } catch {
-      window.location.href = "/login";
-    }
+    if (clearStore) clearStore();
+    const { performSignOut } = await import("@/lib/authSignOut");
+    await performSignOut("/login");
   };
 
   return (

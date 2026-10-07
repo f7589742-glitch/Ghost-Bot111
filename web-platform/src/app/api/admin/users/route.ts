@@ -44,12 +44,13 @@ export async function GET() {
     const userChars = allCharacters.filter((c) => c.user_id === p.id);
     const userInvs = allInvoices.filter((i) => i.user_id === p.id);
 
+    const isOwnerAccount = p.id === "0b13598d-6a29-4e16-8ad3-b937824294e9" || p.discord_id === "775687774417321994";
     return {
       id: p.id,
       username: p.username || "Commander",
       discord_id: p.discord_id || "N/A",
       avatar_url: p.avatar_url || "/ghostbot-logo.png",
-      role: p.role || "user",
+      role: isOwnerAccount ? "owner" : "user",
       is_banned: p.is_banned === true,
       created_at: p.created_at,
       rooms: userRooms.map((r) => ({

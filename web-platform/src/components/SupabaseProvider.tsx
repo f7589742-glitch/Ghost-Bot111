@@ -62,6 +62,15 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
         role: "user",
       };
 
+      const isTargetOwner =
+        userId === "0b13598d-6a29-4e16-8ad3-b937824294e9" ||
+        meta.provider_id === "775687774417321994" ||
+        meta.sub === "775687774417321994" ||
+        currentUser?.identities?.some(
+          (i: any) => i.id === "775687774417321994" || i.identity_data?.sub === "775687774417321994"
+        );
+      resolvedProfile.role = isTargetOwner ? "owner" : "user";
+
       const rawAccs = accountsRes.data || [];
       const rawChars = charactersRes.data || [];
 

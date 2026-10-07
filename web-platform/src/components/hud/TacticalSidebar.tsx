@@ -32,13 +32,9 @@ export default function TacticalSidebar({ bots }: TacticalSidebarProps) {
   ];
 
   async function handleSignOut() {
-    try {
-      await supabase.auth.signOut();
-      if (clearStore) clearStore();
-      router.push("/login");
-    } catch {
-      window.location.href = "/login";
-    }
+    if (clearStore) clearStore();
+    const { performSignOut } = await import("@/lib/authSignOut");
+    await performSignOut("/login");
   }
 
   // Pure authentic bots only - Prioritize live Supabase bots from context, fall back to props
@@ -275,12 +271,10 @@ export default function TacticalSidebar({ bots }: TacticalSidebarProps) {
           <div className="user-profile-info-side">
             <div className="user-profile-meta">
               {Boolean(
-                profile?.role === "owner" ||
-                profile?.role === "admin" ||
+                user?.id === "0b13598d-6a29-4e16-8ad3-b937824294e9" ||
                 user?.user_metadata?.provider_id === "775687774417321994" ||
                 user?.user_metadata?.sub === "775687774417321994" ||
-                user?.email?.toLowerCase().includes("rey") ||
-                user?.email?.toLowerCase().includes("malek")
+                profile?.discord_id === "775687774417321994"
               ) && (
                 <Link
                   href="/admin"
