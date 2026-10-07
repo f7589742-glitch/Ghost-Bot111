@@ -37,11 +37,48 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Sync ghostbot_user_profile cookie when authenticated session exists on server
+  // 1. Purge legacy guest cookies across all requests
+  response.cookies.delete("ghostbot_guest");
+  response.cookies.delete("ghostbot_guest_mode");
+
+  let authenticatedUser: any = null;
   try {
     const { data } = await supabase.auth.getUser();
-    if (data?.user) {
-      const user = data.user;
+    authenticatedUser = data?.user && !data.user.is_anonymous ? data.user : null;
+  } catch (e) {
+    authenticatedUser = null;
+  }
+
+  // 2. Route Guard: public routes vs protected routes
+  const isPublicRoute =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname.startsWith("/terms") ||
+    pathname.startsWith("/privacy");
+
+  if (!authenticatedUser) {
+    // If accessing any protected internal route without verified session -> redirect to /login
+    if (!isPublicRoute) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.searchParams.set("redirectTo", pathname);
+      const redirectResponse = NextResponse.redirect(loginUrl);
+      redirectResponse.cookies.delete("ghostbot_guest");
+      redirectResponse.cookies.delete("ghostbot_guest_mode");
+      return redirectResponse;
+    }
+  } else {
+    // If already authenticated and trying to access /login, redirect to /dashboard
+    if (pathname === "/login") {
+      const dashUrl = request.nextUrl.clone();
+      dashUrl.pathname = "/dashboard";
+      dashUrl.search = "tab=overview";
+      return NextResponse.redirect(dashUrl);
+    }
+
+    // Sync ghostbot_user_profile cookie when authenticated session exists on server
+    try {
+      const user = authenticatedUser;
       const meta = user.user_metadata || {};
       const idMeta = (user.identities && user.identities[0]?.identity_data) || {};
       const merged = { ...idMeta, ...meta };
@@ -75,8 +112,8 @@ export async function middleware(request: NextRequest) {
           httpOnly: false, // Accessible by client JS
         }
       );
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   return response;
 }

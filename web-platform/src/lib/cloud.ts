@@ -13,13 +13,7 @@ export async function getSessionUser() {
     try {
       const supabase = createClient();
       const { data } = await supabase.auth.getUser();
-      if (data?.user) return data.user;
-    } catch {}
-  }
-  if (typeof window !== "undefined") {
-    try {
-      const guest = localStorage.getItem("ghostbot_guest_user");
-      if (guest) return JSON.parse(guest);
+      if (data?.user && !data.user.is_anonymous) return data.user;
     } catch {}
   }
   return null;
@@ -89,13 +83,13 @@ export async function createCloudBot(bot: OwnedBot) {
   try {
     const supabase = createClient();
     let botSlug = bot.bot_id;
-    if (!botSlug) {
+    if (!botSlug || botSlug === "bot-0" || botSlug === "bot-1") {
       const { count } = await supabase
         .from("bot_instances")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id);
-      const seq = count || 0;
-      botSlug = `bot-${seq}`;
+      const seq = (count || 0) + 1;
+      botSlug = `bot-${user.id.slice(0, 8)}-${seq}`;
     }
     const { data: createdBot, error: botErr } = await supabase.from("bot_instances").upsert(
       {

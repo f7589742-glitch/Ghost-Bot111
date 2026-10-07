@@ -205,8 +205,8 @@ class AccountDAO:
         with con:
             existing = con.execute("SELECT id, user_id, device_profile, bot_id FROM accounts WHERE LOWER(email) = LOWER(?)", (email.strip(),)).fetchone()
             if existing:
-                # Re-assign ownership to the newly authenticated user_id and target bot_id
-                # when the user explicitly links/authenticates the game account
+                if existing["user_id"] and existing["user_id"] != user_id:
+                    raise PermissionError("ACCOUNT_OWNED_BY_ANOTHER_USER")
                 final_dev = dev_json or existing["device_profile"]
                 final_bot_id = norm_bot_id if norm_bot_id is not None else existing["bot_id"]
                 con.execute("""
@@ -366,8 +366,19 @@ class CharacterDAO:
     ) -> Dict[str, Any]:
         con = get_db_connection()
         with con:
-            existing = con.execute("SELECT id FROM characters WHERE role_id = ?", (str(role_id),)).fetchone()
+            target_acc = con.execute("SELECT user_id FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            target_user_id = target_acc["user_id"] if target_acc else None
+
+            existing = con.execute("""
+                SELECT c.id, c.account_id, a.user_id 
+                FROM characters c 
+                JOIN accounts a ON c.account_id = a.id 
+                WHERE c.role_id = ?
+            """, (str(role_id),)).fetchone()
+
             if existing:
+                if target_user_id and existing["user_id"] and existing["user_id"] != target_user_id:
+                    raise PermissionError("CHARACTER_OWNED_BY_ANOTHER_USER")
                 con.execute("""
                     UPDATE characters
                     SET account_id = ?, name = ?, kingdom_id = ?, power = ?, city_level = ?, avatar_url = ?, alliance_tag = ?, is_active_cloud = ?, last_synced = CURRENT_TIMESTAMP

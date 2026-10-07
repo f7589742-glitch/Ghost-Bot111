@@ -294,53 +294,7 @@ function LoginInner() {
                   </span>
                 </button>
 
-                {/* 2. GUEST LOGIN BUTTON (LOCAL DEMO) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      setLoading(true);
-                      if (typeof window !== "undefined") {
-                        document.cookie = "ghostbot_guest=1; path=/; max-age=86400";
-                        localStorage.setItem("ghostbot_guest_mode", "true");
-                        localStorage.setItem(
-                          "ghostbot_user_profile",
-                          JSON.stringify({
-                            id: "guest-commander",
-                            username: "Rey",
-                            avatar_url: "/ghostbot-logo.png",
-                            email: "rey@ghostbot.local",
-                            is_guest: true,
-                          })
-                        );
-                        window.location.href = "/dashboard?tab=overview";
-                      }
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  disabled={loading}
-                  style={{
-                    width: "100%",
-                    padding: "12px 18px",
-                    borderRadius: "14px",
-                    fontWeight: 800,
-                    fontSize: "12.5px",
-                    background: "rgba(0, 229, 255, 0.08)",
-                    border: "1.5px solid rgba(0, 229, 255, 0.4)",
-                    color: "var(--ghost-cyan)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "10px",
-                    cursor: "pointer",
-                    transition: "all 0.25s ease",
-                  }}
-                  className="hover:bg-[rgba(0,229,255,0.16)] hover:border-[#00e5ff] hover:scale-[1.01]"
-                >
-                  <Zap style={{ width: "16px", height: "16px" }} />
-                  <span>{lang === "ar" ? "دخول فوري كزائر (تجربة سريعة)" : "Instant Guest Demo Access"}</span>
-                </button>
+
 
                 {/* Security Guarantee Pill */}
                 <div

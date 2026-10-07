@@ -47,6 +47,160 @@ def _extract_user_id(req: Any = None, request: Optional[Request] = None) -> str:
 logger = logging.getLogger("API_ROUTES")
 router = APIRouter(prefix="/api")
 
+_BOT_ID_CACHE: Dict[str, str] = {}
+
+def _normalize_bot_id(bot_id: Optional[str] = None) -> str:
+    bid = str(bot_id or "").strip()
+    if not bid or bid.lower() in ("all", "undefined", "null", "*"):
+        return ""
+    if bid.isdigit():
+        return f"bot-{bid}"
+    if bid in _BOT_ID_CACHE:
+        return _BOT_ID_CACHE[bid]
+    if len(bid) == 36 and bid.count("-") == 4:
+        try:
+            import os, urllib.request, json
+            sb_url = os.getenv("SUPABASE_URL", "https://ksrfhjhldgsazqjxealh.supabase.co").rstrip("/")
+            sb_key = os.getenv("SUPABASE_SERVICE_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_Pmsmj4HkG7Nu_zSLsHpskw_xFAvFNVa"))
+            if sb_url and sb_key:
+                req_url = f"{sb_url}/rest/v1/bot_instances?id=eq.{bid}&select=bot_id"
+                req = urllib.request.Request(req_url, headers={
+                    "apikey": sb_key,
+                    "Authorization": f"Bearer {sb_key}"
+                })
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
+                    data = json.loads(resp.read().decode())
+                    if data and len(data) > 0 and data[0].get("bot_id"):
+                        resolved = str(data[0]["bot_id"]).strip()
+                        _BOT_ID_CACHE[bid] = resolved
+                        return resolved
+        except Exception as e:
+            logger.debug(f"Supabase bot_id lookup exception: {e}")
+    return bid
+
+def _resolve_tenant_uid(user_id: Optional[str] = None, bot_id: Optional[str] = None, request: Optional[Request] = None) -> str:
+    uid = (user_id or "").strip()
+    if request:
+        auth_header = request.headers.get("authorization", "").strip()
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+            try:
+                from app.core.auth import decode_supabase_jwt
+                claims = decode_supabase_jwt(token)
+                sub = claims.get("sub") or claims.get("user_id")
+                if sub:
+                    return str(sub).strip()
+            except Exception:
+                pass
+        if not uid or uid in ("dev-operator", "undefined", "null"):
+            uid = request.headers.get("x-user-id", "").strip() or request.query_params.get("user_id", "").strip()
+    if not uid or uid in ("dev-operator", "undefined", "null"):
+        return ""
+    return uid
+
+def get_room_slots(user_id: str, bot_id: Optional[str] = None) -> int:
+    """Returns max slots allowed for the given room/bot instance (defaults to 5)."""
+    if not user_id:
+        return 5
+    bid = _normalize_bot_id(bot_id) if bot_id else None
+    try:
+        import os, urllib.request, json
+        sb_url = os.getenv("SUPABASE_URL", "https://ksrfhjhldgsazqjxealh.supabase.co").rstrip("/")
+        sb_key = os.getenv("SUPABASE_SERVICE_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_Pmsmj4HkG7Nu_zSLsHpskw_xFAvFNVa"))
+        if sb_url and sb_key:
+            if bid:
+                req_url = f"{sb_url}/rest/v1/bot_instances?user_id=eq.{user_id}&bot_id=eq.{bid}&select=slots"
+            else:
+                req_url = f"{sb_url}/rest/v1/bot_instances?user_id=eq.{user_id}&select=slots&limit=1"
+            req = urllib.request.Request(req_url, headers={
+                "apikey": sb_key,
+                "Authorization": f"Bearer {sb_key}"
+            })
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                data = json.loads(resp.read().decode())
+                if data and len(data) > 0 and data[0].get("slots"):
+                    return int(data[0]["slots"])
+    except Exception as e:
+        logger.debug(f"get_room_slots error: {e}")
+    return 5
+
+def count_active_room_characters(user_id: str, bot_id: Optional[str] = None, exclude_account_id: Optional[int] = None) -> int:
+    con = get_db_connection()
+    bids = []
+    if bot_id:
+        bid = _normalize_bot_id(bot_id) or bot_id
+        bids = [bid]
+        if bid.startswith("bot-"):
+            bids.append(bid[4:])
+        elif bid.isdigit():
+            bids.append(f"bot-{bid}")
+    
+    conds = ["a.user_id = ?"]
+    params = [user_id]
+    if bids:
+        ph = ",".join("?" for _ in bids)
+        conds.append(f"a.bot_id IN ({ph})")
+        params.extend(bids)
+    if exclude_account_id:
+        conds.append("a.id != ?")
+        params.append(exclude_account_id)
+    
+    sql = f"""
+        SELECT COUNT(c.id) 
+        FROM characters c 
+        JOIN accounts a ON c.account_id = a.id 
+        WHERE {' AND '.join(conds)} AND c.enabled = 1
+    """
+    row = con.execute(sql, tuple(params)).fetchone()
+    return int(row[0]) if row else 0
+
+def check_cross_user_conflict(user_id: str, email: str, raw_characters: Optional[List[Dict[str, Any]]] = None, bot_id: Optional[str] = None):
+    con = get_db_connection()
+    norm_bot_id = _normalize_bot_id(bot_id) if bot_id else None
+    clean_email = email.strip().lower()
+
+    # 1. Email ownership check
+    existing_acc = con.execute("SELECT id, user_id, bot_id FROM accounts WHERE LOWER(email) = ?", (clean_email,)).fetchone()
+    if existing_acc:
+        acc_uid = existing_acc["user_id"]
+        acc_bid = existing_acc["bot_id"]
+        if acc_uid and acc_uid != user_id:
+            raise HTTPException(
+                status_code=409,
+                detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+            )
+        if acc_uid == user_id and norm_bot_id and acc_bid and _normalize_bot_id(acc_bid) != norm_bot_id:
+            raise HTTPException(
+                status_code=400,
+                detail="هذا الحاكم مضاف بالفعل إلى غرفة أخرى."
+            )
+
+    # 2. Characters ownership check
+    if raw_characters:
+        for rc in raw_characters:
+            r_id = str(rc.get("role_id") or "")
+            if not r_id:
+                continue
+            existing_char = con.execute("""
+                SELECT c.id, c.account_id, a.user_id, a.bot_id 
+                FROM characters c 
+                JOIN accounts a ON c.account_id = a.id 
+                WHERE c.role_id = ?
+            """, (r_id,)).fetchone()
+            if existing_char:
+                char_uid = existing_char["user_id"]
+                char_bid = existing_char["bot_id"]
+                if char_uid and char_uid != user_id:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+                    )
+                if char_uid == user_id and norm_bot_id and char_bid and _normalize_bot_id(char_bid) != norm_bot_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="هذا الحاكم مضاف بالفعل إلى غرفة أخرى."
+                    )
+
 _DEFAULT_GATHER_SEED = {
     "food": 1, "wood": 1, "stone": 1, "gold": 0, "gem": 0,
     "max_node_level": "Level 6 and below",
@@ -136,6 +290,19 @@ def sync_account(req: AccountSyncRequest, request: Request):
     if not user_id:
         raise HTTPException(status_code=401, detail="Tenant user_id required")
 
+    req_bot_id = getattr(req, "bot_id", None)
+    # Check email cross-user ownership and room conflict
+    check_cross_user_conflict(user_id=user_id, email=email, bot_id=req_bot_id)
+
+    # Enforce license slot capacity (5/5 max slots)
+    max_slots = get_room_slots(user_id, req_bot_id)
+    used_slots = count_active_room_characters(user_id, req_bot_id)
+    if used_slots >= max_slots:
+        raise HTTPException(
+            status_code=400,
+            detail=f"تم بلوغ الحد الأقصى للباقة ({max_slots} حكام). يرجى ترقية الباقة لإضافة المزيد."
+        )
+
     existing_acc = AccountDAO.get_by_email(email, user_id)
     device_profile = None
 
@@ -151,7 +318,6 @@ def sync_account(req: AccountSyncRequest, request: Request):
             # Guard 1: genuine Lilith app_tokens always start with "A-".
             # A corrupt cached value must never produce a fake "0 characters" success.
             if app_token and str(app_token).startswith("A-"):
-                req_bot_id = getattr(req, "bot_id", None)
                 if req_bot_id:
                     try:
                         from app.database import get_db_connection
@@ -163,19 +329,28 @@ def sync_account(req: AccountSyncRequest, request: Request):
                 # Sync fresh characters from rocdir
                 raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
                 if raw_characters:
+                    check_cross_user_conflict(user_id=user_id, email=email, raw_characters=raw_characters, bot_id=req_bot_id)
                     synced_characters = []
                     for rc in raw_characters:
-                        c_obj = CharacterDAO.upsert(
-                            account_id=account_id,
-                            role_id=str(rc["role_id"]),
-                            name=rc["name"],
-                            kingdom_id=int(rc["kingdom_id"]),
-                            power=int(rc.get("power", 0)),
-                            city_level=int(rc.get("city_level", 1)),
-                            avatar_url=rc.get("avatar_url", ""),
-                            alliance_tag=rc.get("alliance_tag", ""),
-                            is_active_cloud=False
-                        )
+                        try:
+                            c_obj = CharacterDAO.upsert(
+                                account_id=account_id,
+                                role_id=str(rc["role_id"]),
+                                name=rc["name"],
+                                kingdom_id=int(rc["kingdom_id"]),
+                                power=int(rc.get("power", 0)),
+                                city_level=int(rc.get("city_level", 1)),
+                                avatar_url=rc.get("avatar_url", ""),
+                                alliance_tag=rc.get("alliance_tag", ""),
+                                is_active_cloud=False
+                            )
+                        except PermissionError as e:
+                            if "OWNED_BY_ANOTHER_USER" in str(e):
+                                raise HTTPException(
+                                    status_code=409,
+                                    detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+                                )
+                            raise HTTPException(status_code=403, detail=str(e))
                         synced_characters.append(c_obj)
                         _seed_character_settings(int(c_obj["id"]), user_id)
 
@@ -261,8 +436,9 @@ def sync_account(req: AccountSyncRequest, request: Request):
                               "/ Logged in, but Lilith returned no characters for this account.")
         )
 
+    check_cross_user_conflict(user_id=user_id, email=email, raw_characters=raw_characters, bot_id=req_bot_id)
+
     enc_pw = encrypt_password(password)
-    req_bot_id = getattr(req, "bot_id", None)
     try:
         acc_obj = AccountDAO.upsert(
             email=email,
@@ -276,22 +452,35 @@ def sync_account(req: AccountSyncRequest, request: Request):
             bot_id=req_bot_id
         )
     except PermissionError as e:
+        if "OWNED_BY_ANOTHER_USER" in str(e):
+            raise HTTPException(
+                status_code=409,
+                detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+            )
         raise HTTPException(status_code=403, detail=str(e))
     account_id = acc_obj["id"]
 
     synced_characters = []
     for rc in raw_characters:
-        c_obj = CharacterDAO.upsert(
-            account_id=account_id,
-            role_id=str(rc["role_id"]),
-            name=rc["name"],
-            kingdom_id=int(rc["kingdom_id"]),
-            power=int(rc.get("power", 0)),
-            city_level=int(rc.get("city_level", 1)),
-            avatar_url=rc.get("avatar_url", ""),
-            alliance_tag=rc.get("alliance_tag", ""),
-            is_active_cloud=False
-        )
+        try:
+            c_obj = CharacterDAO.upsert(
+                account_id=account_id,
+                role_id=str(rc["role_id"]),
+                name=rc["name"],
+                kingdom_id=int(rc["kingdom_id"]),
+                power=int(rc.get("power", 0)),
+                city_level=int(rc.get("city_level", 1)),
+                avatar_url=rc.get("avatar_url", ""),
+                alliance_tag=rc.get("alliance_tag", ""),
+                is_active_cloud=False
+            )
+        except PermissionError as e:
+            if "OWNED_BY_ANOTHER_USER" in str(e):
+                raise HTTPException(
+                    status_code=409,
+                    detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+                )
+            raise HTTPException(status_code=403, detail=str(e))
         synced_characters.append(c_obj)
         _seed_character_settings(int(c_obj["id"]), user_id)
 
@@ -320,6 +509,19 @@ def verify_captcha(req: CaptchaVerifyRequest, request: Request):
     if not user_id:
         raise HTTPException(status_code=401, detail="Tenant user_id required")
 
+    req_bot_id = getattr(req, "bot_id", None)
+    # Check email cross-user ownership and room conflict
+    check_cross_user_conflict(user_id=user_id, email=email, bot_id=req_bot_id)
+
+    # Enforce license slot capacity (5/5 max slots)
+    max_slots = get_room_slots(user_id, req_bot_id)
+    used_slots = count_active_room_characters(user_id, req_bot_id)
+    if used_slots >= max_slots:
+        raise HTTPException(
+            status_code=400,
+            detail=f"تم بلوغ الحد الأقصى للباقة ({max_slots} حكام). يرجى ترقية الباقة لإضافة المزيد."
+        )
+
     existing_acc = AccountDAO.get_by_email(email, user_id)
     device_profile = existing_acc.get("device_profile") if existing_acc else DeviceGenerator.generate(email)
     device_profile = DeviceGenerator.ensure_sdk_fields(device_profile, email)
@@ -344,8 +546,16 @@ def verify_captcha(req: CaptchaVerifyRequest, request: Request):
     udid = ver_res["udid"]
     expires_at = ver_res.get("token_expires_at")
 
+    raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+    if not raw_characters:
+        gw_msg = LilithCloudService.roles_error_message()
+        raise HTTPException(status_code=400, detail=gw_msg or (
+            "Captcha verified, but Lilith returned no characters for this account. "
+            "Make sure it owns Rise of Kingdoms governors."))
+
+    check_cross_user_conflict(user_id=user_id, email=email, raw_characters=raw_characters, bot_id=req_bot_id)
+
     enc_pw = encrypt_password(password)
-    req_bot_id = getattr(req, "bot_id", None)
     try:
         acc_obj = AccountDAO.upsert(
             email=email,
@@ -359,28 +569,35 @@ def verify_captcha(req: CaptchaVerifyRequest, request: Request):
             bot_id=req_bot_id
         )
     except PermissionError as e:
+        if "OWNED_BY_ANOTHER_USER" in str(e):
+            raise HTTPException(
+                status_code=409,
+                detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+            )
         raise HTTPException(status_code=403, detail=str(e))
     account_id = acc_obj["id"]
 
-    raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
-    if not raw_characters:
-        gw_msg = LilithCloudService.roles_error_message()
-        raise HTTPException(status_code=400, detail=gw_msg or (
-            "Captcha verified, but Lilith returned no characters for this account. "
-            "Make sure it owns Rise of Kingdoms governors."))
     synced_characters = []
     for rc in raw_characters:
-        c_obj = CharacterDAO.upsert(
-            account_id=account_id,
-            role_id=str(rc["role_id"]),
-            name=rc["name"],
-            kingdom_id=int(rc["kingdom_id"]),
-            power=int(rc.get("power", 0)),
-            city_level=int(rc.get("city_level", 1)),
-            avatar_url=rc.get("avatar_url", ""),
-            alliance_tag=rc.get("alliance_tag", ""),
-            is_active_cloud=False
-        )
+        try:
+            c_obj = CharacterDAO.upsert(
+                account_id=account_id,
+                role_id=str(rc["role_id"]),
+                name=rc["name"],
+                kingdom_id=int(rc["kingdom_id"]),
+                power=int(rc.get("power", 0)),
+                city_level=int(rc.get("city_level", 1)),
+                avatar_url=rc.get("avatar_url", ""),
+                alliance_tag=rc.get("alliance_tag", ""),
+                is_active_cloud=False
+            )
+        except PermissionError as e:
+            if "OWNED_BY_ANOTHER_USER" in str(e):
+                raise HTTPException(
+                    status_code=409,
+                    detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+                )
+            raise HTTPException(status_code=403, detail=str(e))
         synced_characters.append(c_obj)
         _seed_character_settings(int(c_obj["id"]), user_id)
 
@@ -409,6 +626,19 @@ def finalize_captcha(req: FinalizeCaptchaRequest, request: Request):
     if not user_id:
         raise HTTPException(status_code=401, detail="Tenant user_id required")
 
+    req_bot_id = getattr(req, "bot_id", None)
+    # Check email cross-user ownership and room conflict
+    check_cross_user_conflict(user_id=user_id, email=email, bot_id=req_bot_id)
+
+    # Enforce license slot capacity (5/5 max slots)
+    max_slots = get_room_slots(user_id, req_bot_id)
+    used_slots = count_active_room_characters(user_id, req_bot_id)
+    if used_slots >= max_slots:
+        raise HTTPException(
+            status_code=400,
+            detail=f"تم بلوغ الحد الأقصى للباقة ({max_slots} حكام). يرجى ترقية الباقة لإضافة المزيد."
+        )
+
     existing_acc = AccountDAO.get_by_email(email, user_id)
     device_profile = existing_acc.get("device_profile") if existing_acc else DeviceGenerator.generate(email)
     device_profile = DeviceGenerator.ensure_sdk_fields(device_profile, email)
@@ -434,6 +664,14 @@ def finalize_captcha(req: FinalizeCaptchaRequest, request: Request):
     udid = ver_res["udid"]
     expires_at = ver_res.get("token_expires_at")
 
+    raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
+    if not raw_characters:
+        gw_msg = LilithCloudService.roles_error_message()
+        raise HTTPException(status_code=400, detail=gw_msg or (
+            "Verification successful, but Lilith returned no characters for this account."))
+
+    check_cross_user_conflict(user_id=user_id, email=email, raw_characters=raw_characters, bot_id=req_bot_id)
+
     enc_pw = encrypt_password(password)
     try:
         acc_obj = AccountDAO.upsert(
@@ -444,30 +682,39 @@ def finalize_captcha(req: FinalizeCaptchaRequest, request: Request):
             app_uid=app_uid,
             app_token=app_token,
             token_expires_at=expires_at,
-            device_profile=device_profile
+            device_profile=device_profile,
+            bot_id=req_bot_id
         )
     except PermissionError as e:
+        if "OWNED_BY_ANOTHER_USER" in str(e):
+            raise HTTPException(
+                status_code=409,
+                detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+            )
         raise HTTPException(status_code=403, detail=str(e))
     account_id = acc_obj["id"]
 
-    raw_characters = LilithCloudService.get_roles(app_uid, app_token, udid)
-    if not raw_characters:
-        gw_msg = LilithCloudService.roles_error_message()
-        raise HTTPException(status_code=400, detail=gw_msg or (
-            "Verification successful, but Lilith returned no characters for this account."))
     synced_characters = []
     for rc in raw_characters:
-        c_obj = CharacterDAO.upsert(
-            account_id=account_id,
-            role_id=str(rc["role_id"]),
-            name=rc["name"],
-            kingdom_id=int(rc["kingdom_id"]),
-            power=int(rc.get("power", 0)),
-            city_level=int(rc.get("city_level", 1)),
-            avatar_url=rc.get("avatar_url", ""),
-            alliance_tag=rc.get("alliance_tag", ""),
-            is_active_cloud=False
-        )
+        try:
+            c_obj = CharacterDAO.upsert(
+                account_id=account_id,
+                role_id=str(rc["role_id"]),
+                name=rc["name"],
+                kingdom_id=int(rc["kingdom_id"]),
+                power=int(rc.get("power", 0)),
+                city_level=int(rc.get("city_level", 1)),
+                avatar_url=rc.get("avatar_url", ""),
+                alliance_tag=rc.get("alliance_tag", ""),
+                is_active_cloud=False
+            )
+        except PermissionError as e:
+            if "OWNED_BY_ANOTHER_USER" in str(e):
+                raise HTTPException(
+                    status_code=409,
+                    detail="هذا الحساب أو الحاكم مسجل بالفعل لدى مستخدم آخر في المنصة. يرجى التواصل مع الدعم الفني إذا كنت المالك الحقيقي."
+                )
+            raise HTTPException(status_code=403, detail=str(e))
         synced_characters.append(c_obj)
         _seed_character_settings(int(c_obj["id"]), user_id)
 
@@ -1531,20 +1778,18 @@ def get_fleet_grouped(request: Request, user_id: Optional[str] = Query(None), bo
     req_uid = request.headers.get("x-user-id", "").strip() or (user_id or "").strip()
     norm_bot_id = _normalize_bot_id(bot_id)
     uid = _resolve_tenant_uid(req_uid, norm_bot_id, request) if req_uid else None
-    if uid == "7073815c-2620-442d-80fe-5c4c8886da85":
-        uid = None
 
     accounts = []
     if norm_bot_id:
         if uid:
             accounts = AccountDAO.get_all(user_id=uid, bot_id=norm_bot_id)
-        if not accounts:
+        else:
             accounts = AccountDAO.get_all(bot_id=norm_bot_id)
     else:
         # All bots / entire fleet for this tenant
         if uid:
             accounts = AccountDAO.get_all(user_id=uid)
-        if not accounts:
+        else:
             accounts = AccountDAO.get_all()
     """Returns this tenant's accounts grouped with their nested characters, status, and formatted run times."""
     
@@ -1592,6 +1837,19 @@ def toggle_character(role_id: str, user_id: str = Query(...)):
         raise HTTPException(status_code=404, detail="Character not found")
     current = char.get("enabled", 1)
     new_state = 0 if current == 1 else 1
+    if new_state == 1:
+        con = get_db_connection()
+        acc_row = con.execute("SELECT a.bot_id, a.user_id FROM accounts a WHERE a.id = ?", (char["account_id"],)).fetchone()
+        if acc_row:
+            eff_uid = acc_row["user_id"] or user_id
+            eff_bot = acc_row["bot_id"]
+            max_slots = get_room_slots(eff_uid, eff_bot)
+            active_count = count_active_room_characters(eff_uid, eff_bot)
+            if active_count >= max_slots:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"تم بلوغ الحد الأقصى للباقة ({max_slots} حكام). يرجى ترقية الباقة لإضافة المزيد."
+                )
     CharacterDAO.set_enabled(role_id, new_state)
     return {"success": True, "role_id": role_id, "enabled": new_state}
 
@@ -1603,11 +1861,23 @@ def set_character_enabled(role_id: str, payload: Dict[str, Any], request: Reques
     uid = (user_id or request.headers.get("x-user-id", "")).strip() or "7073815c-2620-442d-80fe-5c4c8886da85"
     char = CharacterDAO.get_by_role_id(role_id, uid)
     if not char:
-        # Fallback without tenant check if single tenant
         char = CharacterDAO.get_by_role_id(role_id)
     if not char:
         raise HTTPException(status_code=404, detail="Character not found")
     new_state = 1 if bool((payload or {}).get("enabled", True)) else 0
+    if new_state == 1 and not char.get("enabled"):
+        con = get_db_connection()
+        acc_row = con.execute("SELECT a.bot_id, a.user_id FROM accounts a WHERE a.id = ?", (char["account_id"],)).fetchone()
+        if acc_row:
+            eff_uid = acc_row["user_id"] or uid
+            eff_bot = acc_row["bot_id"]
+            max_slots = get_room_slots(eff_uid, eff_bot)
+            active_count = count_active_room_characters(eff_uid, eff_bot)
+            if active_count >= max_slots:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"تم بلوغ الحد الأقصى للباقة ({max_slots} حكام). يرجى ترقية الباقة لإضافة المزيد."
+                )
     CharacterDAO.set_enabled(role_id, bool(new_state))
     return {"success": True, "role_id": role_id, "enabled": new_state}
 
@@ -1702,6 +1972,18 @@ def prune_account_characters(payload: Dict[str, Any], user_id: Optional[str] = Q
             acc = dict(row) if row else None
     if not acc:
         raise HTTPException(status_code=404, detail="Account not found")
+
+    eff_uid = acc.get("user_id") or uid
+    eff_bot_id = acc.get("bot_id")
+    if eff_uid and eff_bot_id:
+        max_slots = get_room_slots(eff_uid, eff_bot_id)
+        other_active = count_active_room_characters(eff_uid, eff_bot_id, exclude_account_id=acc["id"])
+        if len(keep) + other_active > max_slots:
+            raise HTTPException(
+                status_code=400,
+                detail=f"تم بلوغ الحد الأقصى للباقة ({max_slots} حكام). يرجى ترقية الباقة لإضافة المزيد."
+            )
+
     removed = []
     for c in CharacterDAO.get_by_account_id(acc["id"]):
         if str(c.get("role_id")) not in keep:
@@ -1937,60 +2219,6 @@ async def run_bot_now(request: Request, user_id: Optional[str] = Query(None), bo
     return {"success": True, "running": True, "bot_id": target_bot_id, "message": "Immediate staged pass triggered successfully"}
 
 
-_BOT_ID_CACHE: Dict[str, str] = {}
-
-def _normalize_bot_id(bot_id: Optional[str] = None) -> str:
-    bid = str(bot_id or "").strip()
-    if not bid or bid.lower() in ("all", "undefined", "null", "*"):
-        return ""
-    if bid.isdigit():
-        return f"bot-{bid}"
-    if bid in _BOT_ID_CACHE:
-        return _BOT_ID_CACHE[bid]
-    if len(bid) == 36 and bid.count("-") == 4:
-        try:
-            import os, urllib.request, json
-            sb_url = os.getenv("SUPABASE_URL", "https://ksrfhjhldgsazqjxealh.supabase.co").rstrip("/")
-            sb_key = os.getenv("SUPABASE_SERVICE_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_Pmsmj4HkG7Nu_zSLsHpskw_xFAvFNVa"))
-            if sb_url and sb_key:
-                req_url = f"{sb_url}/rest/v1/bot_instances?id=eq.{bid}&select=bot_id"
-                req = urllib.request.Request(req_url, headers={
-                    "apikey": sb_key,
-                    "Authorization": f"Bearer {sb_key}"
-                })
-                with urllib.request.urlopen(req, timeout=3.0) as resp:
-                    data = json.loads(resp.read().decode())
-                    if data and len(data) > 0 and data[0].get("bot_id"):
-                        resolved = str(data[0]["bot_id"]).strip()
-                        _BOT_ID_CACHE[bid] = resolved
-                        return resolved
-        except Exception as e:
-            logger.debug(f"Supabase bot_id lookup exception: {e}")
-    return bid
-
-def _resolve_tenant_uid(user_id: Optional[str] = None, bot_id: Optional[str] = None, request: Optional[Request] = None) -> str:
-    uid = (user_id or "").strip()
-    if request:
-        auth_header = request.headers.get("authorization", "").strip()
-        if auth_header.startswith("Bearer "):
-            token = auth_header.split(" ", 1)[1].strip()
-            try:
-                from app.core.auth import decode_supabase_jwt
-                claims = decode_supabase_jwt(token)
-                sub = claims.get("sub") or claims.get("user_id")
-                if sub:
-                    return str(sub).strip()
-            except Exception:
-                pass
-        if not uid or uid in ("dev-operator", "undefined", "null"):
-            uid = request.headers.get("x-user-id", "").strip() or request.query_params.get("user_id", "").strip()
-    if not uid or uid in ("dev-operator", "undefined", "null"):
-        return ""
-    return uid
-
-
-
-
 @router.post("/bot/{bot_id}/start")
 async def start_bot_unit(bot_id: str, request: Request, user_id: Optional[str] = Query(None)):
     target_bot_id = _normalize_bot_id(bot_id) or "bot-0"
@@ -1999,7 +2227,7 @@ async def start_bot_unit(bot_id: str, request: Request, user_id: Optional[str] =
     if not uid:
         raise HTTPException(status_code=401, detail="Tenant authentication required")
     
-    # Activate accounts for this specific bot_id (never touch shoob accounts, never overwrite other bots' accounts)
+    # Activate accounts strictly for this user and this bot_id
     try:
         from app.database import get_db_connection
         con = get_db_connection()
@@ -2010,23 +2238,12 @@ async def start_bot_unit(bot_id: str, request: Request, user_id: Optional[str] =
             placeholders = ",".join("?" for _ in bids)
 
             con.execute("UPDATE accounts SET is_active = 0 WHERE LOWER(email) LIKE '%shoob%'")
-            cursor = con.execute(
+            con.execute(
                 f"UPDATE accounts SET is_active = 1, next_run = NULL WHERE user_id = ? AND bot_id IN ({placeholders}) AND LOWER(email) NOT LIKE '%shoob%'",
                 (uid, *bids)
             )
-            if cursor.rowcount == 0:
-                con.execute(
-                    f"UPDATE accounts SET user_id = ?, is_active = 1, next_run = NULL WHERE bot_id IN ({placeholders}) AND LOWER(email) NOT LIKE '%shoob%'",
-                    (uid, *bids)
-                )
-            if cursor.rowcount == 0:
-                con.execute(
-                    f"UPDATE accounts SET bot_id = ?, is_active = 1, next_run = NULL WHERE user_id = ? AND LOWER(email) NOT LIKE '%shoob%'",
-                    (target_bot_id, uid)
-                )
-
             con.execute(
-                f"UPDATE characters SET enabled = 1, next_run = NULL WHERE account_id IN (SELECT id FROM accounts WHERE (user_id = ? OR bot_id IN ({placeholders})) AND LOWER(email) NOT LIKE '%shoob%') AND LOWER(name) NOT LIKE '%shoob%'",
+                f"UPDATE characters SET enabled = 1, next_run = NULL WHERE account_id IN (SELECT id FROM accounts WHERE user_id = ? AND bot_id IN ({placeholders}) AND LOWER(email) NOT LIKE '%shoob%') AND LOWER(name) NOT LIKE '%shoob%'",
                 (uid, *bids)
             )
     except Exception as e_assign:
@@ -2126,8 +2343,6 @@ def bot_fleet(bot_id: str, request: Request, user_id: Optional[str] = Query(None
         accounts = AccountDAO.get_all(bot_id=bid)
     else:
         accounts = AccountDAO.get_all(user_id=uid, bot_id=bid)
-        if not accounts:
-            accounts = AccountDAO.get_all(bot_id=bid)
     out_accounts = []
     for acc in accounts:
         chars = CharacterDAO.get_by_account_id(acc["id"])

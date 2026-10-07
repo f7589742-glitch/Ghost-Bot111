@@ -79,14 +79,7 @@ export function Sidebar() {
     ? contextBots
     : ((tenant?.bots && tenant.bots.length > 0)
       ? tenant.bots
-      : [
-          {
-            id: "bot-1",
-            name: "وحدة مزارع القائد #1",
-            slots: 5,
-            status: "active",
-          }
-        ]);
+      : []);
 
   const isOwner =
     user?.id === "0b13598d-6a29-4e16-8ad3-b937824294e9" ||
@@ -173,35 +166,41 @@ export function Sidebar() {
             </span>
           </div>
           <div className="space-y-1.5">
-            {displayBots.map((b) => {
-              const isActive = pathname.startsWith("/bots") || pathname === "/dashboard";
-              return (
-                <Link
-                  key={b.id}
-                  href="/dashboard?tab=live"
-                  className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${
-                    isActive
-                      ? "bg-[#0b2438] border-[#00e5ff]/60 shadow-[0_0_15px_rgba(0,229,255,0.15)] text-white"
-                      : "bg-[#081524] border-white/[0.06] hover:border-[#00e5ff]/40 text-slate-300"
-                  }`}
-                >
-                  <img src={ITEM_FOOD_BASE64} alt="Farm Bot" className="w-6 h-6 object-contain shrink-0 drop-shadow-[0_0_10px_rgba(0,229,255,0.4)]" />
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-xs font-bold truncate text-white">
-                      {b.name || `GhostBot #${b.id.slice(-4)}`}
-                    </span>
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                      <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                        <span>{isAr ? "نشط" : "Active"}</span>
+            {displayBots.length === 0 ? (
+              <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-[11px] text-slate-400">
+                {isAr ? "لا توجد وحدات نشطة حالياً" : "No active bots yet"}
+              </div>
+            ) : (
+              displayBots.map((b) => {
+                const isActive = pathname.startsWith("/bots") || pathname === "/dashboard";
+                return (
+                  <Link
+                    key={b.id}
+                    href="/dashboard?tab=live"
+                    className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${
+                      isActive
+                        ? "bg-[#0b2438] border-[#00e5ff]/60 shadow-[0_0_15px_rgba(0,229,255,0.15)] text-white"
+                        : "bg-[#081524] border-white/[0.06] hover:border-[#00e5ff]/40 text-slate-300"
+                    }`}
+                  >
+                    <img src={ITEM_FOOD_BASE64} alt="Farm Bot" className="w-6 h-6 object-contain shrink-0 drop-shadow-[0_0_10px_rgba(0,229,255,0.4)]" />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="text-xs font-bold truncate text-white">
+                        {b.name || `GhostBot #${b.id.slice(-4)}`}
                       </span>
-                      <span>•</span>
-                      <span>{b.slots || 5} {isAr ? "مزارع" : "Farms"}</span>
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          <span>{isAr ? "نشط" : "Active"}</span>
+                        </span>
+                        <span>•</span>
+                        <span>{b.slots || 5} {isAr ? "مزارع" : "Farms"}</span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              );
-            })}
+                  </Link>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

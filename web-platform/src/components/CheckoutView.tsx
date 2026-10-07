@@ -64,20 +64,20 @@ export default function CheckoutView({ itemId, itemName, initialReferral = '' }:
       return;
     }
 
-    let seq = 0;
+    let seq = 1;
     try {
       const supabase = createClient();
       const { count } = await supabase
         .from("bot_instances")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id);
-      seq = count || 0;
+      seq = (count || 0) + 1;
     } catch {
-      seq = 0;
+      seq = 1;
     }
 
-    const botSlug = `bot-${seq}`;
-    const id = `bot-${user.id.slice(0, 8)}-${seq}`;
+    const botSlug = `bot-${user.id.slice(0, 8)}-${seq}`;
+    const id = botSlug;
     const bot = {
       id,
       bot_id: botSlug,

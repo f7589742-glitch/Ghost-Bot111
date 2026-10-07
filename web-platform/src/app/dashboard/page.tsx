@@ -341,31 +341,6 @@ export default function DashboardPage() {
     }
   }
 
-  const handleQuickProvision = async () => {
-    try {
-      const { saveBot } = await import("@/lib/store");
-      const newBot = {
-        id: "bot-1",
-        bot_id: "bot-1",
-        product: "farm-bot",
-        label: lang === "ar" ? "وحدة مزارع القائد #1" : "Commander Farm Unit #1",
-        tier: "pro",
-        slots: 5,
-        days: 30,
-        room: "farm-bot",
-        createdAt: Date.now(),
-        expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
-        active: true,
-      };
-      saveBot(newBot);
-      if (refreshUserData) await refreshUserData();
-      notify(lang === "ar" ? "تم تفعيل وحدة البوت بنجاح!" : "Bot unit activated successfully!");
-      setActiveTab("live");
-    } catch (e: any) {
-      notify(`Error: ${e?.message || e}`);
-    }
-  };
-
   const transferTradingPostData: Record<number, { capacity: number; tax: number }> = {
     1:  { capacity: 10000,    tax: 0.35 },
     2:  { capacity: 30000,    tax: 0.34 },
@@ -1432,8 +1407,16 @@ export default function DashboardPage() {
     }
 
     const availableSlots = activeBot?.slots || 5;
-    if (selected.length > availableSlots) {
-      notify(lang === "ar" ? `عفواً، لا يمكنك اختيار أكثر من ${availableSlots} شخصيات لسعة هذه الغرفة.` : `Cannot exceed room capacity of ${availableSlots} slots.`);
+    const otherAccountsCount = (accounts || []).filter(
+      (a: any) => a.email && a.email.toLowerCase() !== linkEmail.trim().toLowerCase()
+    ).length;
+    const remainingSlots = Math.max(0, availableSlots - otherAccountsCount);
+    if (selected.length > remainingSlots) {
+      notify(
+        lang === "ar"
+          ? `عفواً، سعة هذه الوحدة (${availableSlots}) مستخدم منها (${otherAccountsCount}). يمكنك إضافة (${remainingSlots}) حكام كحد أقصى.`
+          : `Cannot exceed capacity: ${otherAccountsCount}/${availableSlots} slots used. You can add up to ${remainingSlots} characters.`
+      );
       return;
     }
 
@@ -1967,28 +1950,21 @@ export default function DashboardPage() {
          ========================================================================= */}
       {activeTab !== "overview" && (
         !activeBot ? (
-          <div style={{ padding: "40px 20px", textAlign: "center", borderRadius: "18px", background: "rgba(6, 17, 36, 0.75)", border: "1px dashed rgba(0, 229, 255, 0.25)" }}>
-            <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--ghost-cyan)", marginBottom: "8px" }}>
-              {t("no_units_active", "لا توجد غرف بوت مفعلة حالياً")}
+          <div style={{ padding: "48px 24px", textAlign: "center", borderRadius: "18px", background: "rgba(6, 17, 36, 0.75)", border: "1px dashed rgba(0, 229, 255, 0.3)" }}>
+            <div style={{ fontSize: "17px", fontWeight: 900, color: "var(--ghost-cyan)", marginBottom: "10px" }}>
+              {lang === "ar" ? "لا توجد لديك وحدات سحابية نشطة حالياً." : "No active cloud units available."}
             </div>
-            <p style={{ fontSize: "13px", color: "var(--text-secondary)", maxWidth: "480px", margin: "0 auto 20px", lineHeight: 1.6 }}>
-              {t("no_units_hint", "قم بطلب رخصة من المتجر لإنشاء غرفتك السحابية المعزولة وربط حساباتك لبدء التشغيل.")}
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", maxWidth: "520px", margin: "0 auto 24px", lineHeight: 1.7 }}>
+              {lang === "ar" ? "قم بشراء أو تفعيل وحدة جديدة للبدء وإدارة مزارعك السحابية المعزولة بأمان." : "Purchase or activate a new cloud bot unit from the store to deploy your isolated fleet."}
             </p>
             <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap" }}>
-              <button
-                onClick={handleQuickProvision}
-                className="btn-cyan-glow"
-                style={{ padding: "10px 22px", fontSize: "12.5px", fontWeight: 800, cursor: "pointer" }}
-              >
-                {lang === "ar" ? "⚡ تفعيل وحدة مزارع فورية (5 مزارع)" : "⚡ Quick Deploy Bot Unit (5 Slots)"}
-              </button>
-              <Link href="/shop" className="btn-ghost-outline" style={{ padding: "10px 22px", fontSize: "12.5px", fontWeight: 800, textDecoration: "none" }}>
-                {t("create_first_unit", "+ متجر الوحدات")}
+              <Link href="/shop" className="btn-cyan-glow" style={{ padding: "12px 28px", fontSize: "13px", fontWeight: 800, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <span>{lang === "ar" ? "🛒 الانتقال للمتجر وشراء وحدة سحابية ←" : "🛒 Go to Store & Deploy Bot Unit ←"}</span>
               </Link>
               <button
                 onClick={() => { setActiveTab("overview"); router.push("/dashboard?tab=overview"); }}
                 className="btn-ghost-outline"
-                style={{ padding: "10px 18px", fontSize: "12.5px", cursor: "pointer" }}
+                style={{ padding: "12px 22px", fontSize: "13px", cursor: "pointer" }}
               >
                 {t("overview", "العودة للنظرة العامة")}
               </button>
@@ -2093,11 +2069,22 @@ export default function DashboardPage() {
                   </button>
                   <button
                     className="hero-cyber-action-btn"
-                    onClick={() => { setShowLinkModal(true); setLinkStep(1); setLinkError(""); }}
-                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      if (accounts.length >= (activeBot?.slots || 5)) {
+                        notify(lang === "ar" ? `تم بلوغ الحد الأقصى للباقة (${activeBot?.slots || 5} خانات). يرجى ترقية الباقة لإضافة المزيد.` : `Room capacity reached (${activeBot?.slots || 5} slots). Please upgrade your plan.`);
+                        return;
+                      }
+                      setShowLinkModal(true); setLinkStep(1); setLinkError("");
+                    }}
+                    disabled={accounts.length >= (activeBot?.slots || 5)}
+                    style={{
+                      cursor: accounts.length >= (activeBot?.slots || 5) ? "not-allowed" : "pointer",
+                      opacity: accounts.length >= (activeBot?.slots || 5) ? 0.6 : 1
+                    }}
+                    title={accounts.length >= (activeBot?.slots || 5) ? (lang === "ar" ? "الوحدة ممتلئة بالكامل" : "Room is at capacity") : ""}
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    <span>ربط حساب جديد</span>
+                    <span>{accounts.length >= (activeBot?.slots || 5) ? (lang === "ar" ? "الوحدة ممتلئة بالكامل" : "Capacity Full") : (lang === "ar" ? "ربط حساب جديد" : "Link Account")}</span>
                   </button>
                   <button
                     className="hero-cyber-action-btn"
@@ -2314,23 +2301,16 @@ export default function DashboardPage() {
                 {/* Fleet Card Items (All Deployed Units) */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
                   {availableBots.length === 0 ? (
-                    <div style={{ padding: "30px 18px", textAlign: "center", borderRadius: "14px", background: "rgba(0,229,255,0.03)", border: "1px dashed rgba(0,229,255,0.22)" }}>
-                      <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--ghost-cyan)", marginBottom: "6px" }}>
-                        {t("no_bots_welcome_title", "مرحباً بك في منصة GhostBot السحابية!")}
+                    <div style={{ padding: "36px 20px", textAlign: "center", borderRadius: "14px", background: "rgba(0,229,255,0.03)", border: "1px dashed rgba(0,229,255,0.25)" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 900, color: "var(--ghost-cyan)", marginBottom: "8px" }}>
+                        {lang === "ar" ? "لا توجد لديك وحدات سحابية نشطة حالياً." : "No active cloud units available."}
                       </div>
-                      <p style={{ fontSize: "12px", color: "var(--text-secondary)", maxWidth: "480px", margin: "0 auto 16px", lineHeight: 1.6 }}>
-                        {t("no_bots_welcome_desc", "لم يتم إنشاء أي غرف أو رخص بوت بعد. لإنشاء غرفتك السحابية وربط حساباتك، يرجى الانتقال للمتجر واختيار باقتك.")}
+                      <p style={{ fontSize: "13px", color: "var(--text-secondary)", maxWidth: "480px", margin: "0 auto 18px", lineHeight: 1.6 }}>
+                        {lang === "ar" ? "قم بشراء أو تفعيل وحدة جديدة للبدء وإدارة مزارعك السحابية المعزولة." : "Purchase or activate a new cloud bot unit from the store to get started."}
                       </p>
                       <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
-                        <button
-                          onClick={handleQuickProvision}
-                          className="btn-cyan-glow"
-                          style={{ padding: "9px 20px", fontSize: "12px", fontWeight: 800, cursor: "pointer" }}
-                        >
-                          {lang === "ar" ? "⚡ تفعيل وحدة مزارع فورية (5 مزارع)" : "⚡ Quick Deploy Bot Unit (5 Slots)"}
-                        </button>
-                        <Link href="/shop" className="btn-ghost-outline" style={{ padding: "9px 20px", fontSize: "12px", fontWeight: 800, textDecoration: "none", display: "inline-block" }}>
-                          {t("btn_go_to_store", "الانتقال إلى متجر التراخيص السحابية ←")}
+                        <Link href="/shop" className="btn-cyan-glow" style={{ padding: "10px 24px", fontSize: "12.5px", fontWeight: 800, textDecoration: "none", display: "inline-block" }}>
+                          {lang === "ar" ? "🛒 الانتقال للمتجر وشراء وحدة سحابية ←" : "🛒 Go to Store & Deploy Unit ←"}
                         </Link>
                       </div>
                     </div>

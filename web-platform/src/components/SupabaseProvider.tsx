@@ -106,7 +106,7 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
 
       let resolvedBots = botsRes.data || [];
       
-      // If user has 0 bots, auto-provision a default bot unit so they never get a dead screen
+      // If user has 0 bots, leave as empty array (0 rooms) for a true multi-tenant default state
       if (resolvedBots.length === 0) {
         try {
           const { getBots } = await import("@/lib/store");
@@ -123,40 +123,9 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
               config: {},
               expires_at: lb.expiresAt || new Date(Date.now() + 30 * 86400000).toISOString(),
             }));
-          } else {
-            const defaultBot = {
-              user_id: userId,
-              bot_id: "bot-1",
-              name: "وحدة مزارع القائد #1",
-              product: "farm-bot",
-              tier: "pro",
-              slots: 5,
-              status: "active",
-              config: {},
-              expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
-            };
-            const { data: createdBot } = await supabase
-              .from("bot_instances")
-              .upsert(defaultBot, { onConflict: "user_id, bot_id" })
-              .select()
-              .single();
-            resolvedBots = createdBot ? [createdBot] : [{ id: "bot-1", ...defaultBot }];
           }
         } catch {
-          resolvedBots = [
-            {
-              id: "bot-1",
-              bot_id: "bot-1",
-              user_id: userId,
-              name: "وحدة مزارع القائد #1",
-              product: "farm-bot",
-              tier: "pro",
-              slots: 5,
-              status: "active",
-              config: {},
-              expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
-            },
-          ];
+          resolvedBots = [];
         }
       }
 
@@ -170,119 +139,12 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
     }
   };
 
-  const hydrateGuestData = async () => {
-    try {
-      const guestProfile = typeof window !== "undefined" ? localStorage.getItem("ghostbot_user_profile") : null;
-      let parsed: any = {
-        id: "guest-commander",
-        username: "Rey PRO",
-        avatar_url: "/ghostbot-logo.png",
-        role: "user",
-        is_guest: true,
-      };
-      if (guestProfile) {
-        try {
-          const loaded = JSON.parse(guestProfile);
-          parsed = { ...parsed, ...loaded };
-          if (parsed.username && (parsed.username.includes("علي غيث") || parsed.username.includes("القائد") || parsed.username.toLowerCase().includes("commander"))) {
-            parsed.username = "Rey PRO";
-          }
-        } catch {}
-      }
-      setProfile(parsed);
-
-      const { getBots, getAccounts } = await import("@/lib/store");
-      const localBots = getBots();
-      const fallbackBot = {
-        id: "farm-bot-1",
-        bot_id: "bot-1",
-        name: "وحدة مزارع القائد #1",
-        product: "farm-bot",
-        tier: "pro",
-        slots: 5,
-        status: "active",
-        config: {},
-        expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
-      };
-
-      const finalBots = localBots && localBots.length > 0
-        ? localBots.map((b) => ({
-            id: b.id,
-            bot_id: b.bot_id || b.id,
-            name: b.label || "وحدة مزارع القائد #1",
-            product: b.product || "farm-bot",
-            tier: b.tier || "pro",
-            slots: b.slots || 5,
-            status: "active",
-            config: {},
-            expires_at: b.expiresAt || new Date(Date.now() + 30 * 86400000).toISOString(),
-          }))
-        : [fallbackBot];
-
-      setBots(finalBots);
-
-      const localAccs = getAccounts("bot-1");
-      if (localAccs && localAccs.length > 0) {
-        const enrichedLocal = localAccs.map((la: any, idx: number) => ({
-          id: `acc-guest-${idx}`,
-          role_id: la.chars?.[0]?.role_id || "222169514",
-          email: la.email,
-          governor_name: la.chars?.[0]?.name || "NucroShop9",
-          kingdom: String(la.chars?.[0]?.kingdom_id || "3057"),
-          city_hall_level: la.chars?.[0]?.city_level || 17,
-          power: 1658910,
-          status: "متصل وجاهز",
-          instance_id: "bot-1",
-          food: "0",
-          wood: "0",
-          stone: "0",
-          gold: "0",
-          gems: "0",
-          total_rss: "0",
-          enabled: la.enabled ?? true,
-        }));
-        setAccounts(enrichedLocal);
-      } else {
-        setAccounts([
-          {
-            id: "char-222169514",
-            role_id: "222169514",
-            email: "farm12213+v8@hotmail.com",
-            governor_name: "NucroShop9",
-            kingdom: "3057",
-            city_hall_level: 17,
-            power: 1658910,
-            status: "متصل وجاهز",
-            instance_id: "bot-1",
-            food: "0",
-            wood: "0",
-            stone: "0",
-            gold: "0",
-            gems: "0",
-            total_rss: "0",
-            enabled: true,
-          },
-          {
-            id: "char-222171278",
-            role_id: "222171278",
-            email: "farm12213+v8@hotmail.com",
-            governor_name: "NucroShop10",
-            kingdom: "3057",
-            city_hall_level: 17,
-            power: 1679578,
-            status: "متصل وجاهز",
-            instance_id: "bot-1",
-            food: "0",
-            wood: "0",
-            stone: "0",
-            gold: "0",
-            gems: "0",
-            total_rss: "0",
-            enabled: true,
-          }
-        ]);
-      }
-    } catch {}
+  const clearUnauthenticatedState = () => {
+    setUser(null);
+    setSession(null);
+    setProfile(null);
+    setBots([]);
+    setAccounts([]);
     setIsLoading(false);
   };
 
@@ -293,15 +155,15 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
     supabase.auth.getSession().then(async (res: any) => {
       const currentSession = res?.data?.session;
       if (!mounted) return;
-      if (currentSession?.user) {
+      if (currentSession?.user && !currentSession.user.is_anonymous) {
         setUser(currentSession.user);
         setSession(currentSession);
         await hydrateUserData(currentSession.user.id, currentSession.user);
       } else {
-        await hydrateGuestData();
+        clearUnauthenticatedState();
       }
     }).catch(async () => {
-      await hydrateGuestData();
+      clearUnauthenticatedState();
     });
 
     // 2. Listen to all Supabase auth lifecycle events

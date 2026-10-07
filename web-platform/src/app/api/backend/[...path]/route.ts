@@ -13,25 +13,39 @@ async function proxyRequest(req: NextRequest, { params }: { params: Promise<{ pa
 
   // Dedicated endpoint for tenant identity and bot fleet metadata
   if (targetPath === "/api/tenant/me" || pathStr.endsWith("tenant/me")) {
-    const uid = req.headers.get("x-user-id")?.trim() || req.nextUrl.searchParams.get("user_id") || "0b13598d-6a29-4e16-8ad3-b937824294e9";
-    return NextResponse.json({
-      authenticated: true,
-      user_id: uid,
-      email: "teez8888@gmail.com",
-      username: "Rey PRO",
-      avatar_url: "/ghostbot-logo.png",
-      is_guest: false,
-      bots: [
-        {
-          id: "bot-1",
-          name: "وحدة مزارع القائد #1",
-          product: "farm-bot",
-          slots: 5,
-          status: "active",
-          tier: "pro"
-        }
-      ]
-    });
+    const uid = req.headers.get("x-user-id")?.trim() || req.nextUrl.searchParams.get("user_id");
+    if (!uid) {
+      return NextResponse.json({ authenticated: false, bots: [] }, { status: 401 });
+    }
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      const adminClient = createAdminClient();
+      const { data: prof } = await adminClient.from("profiles").select("*").eq("id", uid).maybeSingle();
+      const { data: bots } = await adminClient.from("bot_instances").select("*").eq("user_id", uid);
+      return NextResponse.json({
+        authenticated: true,
+        user_id: uid,
+        email: prof?.email || null,
+        username: prof?.username || "Commander",
+        avatar_url: prof?.avatar_url || null,
+        is_guest: false,
+        bots: (bots || []).map((b: any) => ({
+          id: b.id,
+          bot_id: b.bot_id || b.id,
+          name: b.name,
+          product: b.product,
+          slots: b.slots || 5,
+          status: b.status || "active",
+          tier: b.tier || "pro",
+        }))
+      });
+    } catch {
+      return NextResponse.json({
+        authenticated: true,
+        user_id: uid,
+        bots: []
+      });
+    }
   }
   
   // Maintenance check and Ban check
